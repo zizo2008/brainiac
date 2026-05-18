@@ -1,0 +1,323 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // ===============================================================
+    // Helper Functions
+    // ===============================================================
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    function isOwner(userId) {
+      return isAuthenticated() && request.auth.uid == userId;
+    }
+
+    function isDocOwner() {
+      return isAuthenticated() && request.auth.uid == resource.data.uid;
+    }
+
+    function isAdmin() {
+      // The hplays581@gmail.com user is the default admin.
+      return isAuthenticated() &&
+        (get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin' ||
+          (request.auth.token.email == "hplays581@gmail.com" && request.auth.token.email_verified == true));
+    }
+
+    function uidUnchanged() {
+      return !('uid' in request.resource.data) || request.resource.data.uid == request.auth.uid;
+    }
+
+    function uidNotModified() {
+      return !('uid' in request.resource.data) || request.resource.data.uid == resource.data.uid;
+    }
+
+    function hasRequiredFields(fields) {
+      return request.resource.data.keys().hasAll(fields);
+    }
+
+    function validStringLength(field, minLen, maxLen) {
+      return request.resource.data[field] is string &&
+        request.resource.data[field].size() >= minLen &&
+        request.resource.data[field].size() <= maxLen;
+    }
+
+    function isPositive(field) {
+      return request.resource.data[field] is number && request.resource.data[field] >= 0;
+    }
+
+    function isValidList(list, maxSize) {
+      return list is list && list.size() <= maxSize;
+    }
+
+    function hasOnlyAllowedFields(fields) {
+      return request.resource.data.keys().hasOnly(fields);
+    }
+
+    function areImmutableFieldsUnchanged(fields) {
+      return !request.resource.data.diff(resource.data).affectedKeys().hasAny(fields);
+    }
+
+    // ===============================================================
+    // Domain Validators
+    // ===============================================================
+
+    function isValidUser(data) {
+      return data.uid is string && data.uid.size() > 0 && data.uid.size() < 100 &&
+             data.username is string && data.username.size() > 0 && data.username.size() < 50 &&
+             (!('role' in data) || data.role in ['teacher', 'student', 'admin']) &&
+             (!('adminSecret' in data) || data.adminSecret is string) &&
+             (!('isPremium' in data) || data.isPremium is bool) &&
+             (!('premiumRequested' in data) || data.premiumRequested is bool) &&
+             (!('isBanned' in data) || data.isBanned is bool) &&
+             (!('banUntil' in data) || data.banUntil is number || data.banUntil == null);
+    }
+
+    function isValidClassroom(data) {
+      return hasOnlyAllowedFields(['id', 'code', 'teacherId', 'name', 'studentIds', 'subject']) &&
+             data.id is string && data.id.size() > 0 && data.id.size() < 100 &&
+             data.code is string && data.code.size() > 0 && data.code.size() < 20 &&
+             data.teacherId is string && data.teacherId.size() > 0 && data.teacherId.size() < 100 &&
+             data.name is string && data.name.size() > 0 && data.name.size() < 100 &&
+             data.subject is string && data.subject.size() > 0 && data.subject.size() < 50 &&
+             data.studentIds is list && data.studentIds.size() <= 1000;
+    }
+
+    function isValidAssignment(data) {
+      return hasOnlyAllowedFields(['id', 'classroomId', 'subject', 'questionCount', 'createdAt', 'name', 'deadline']) &&
+             data.id is string && data.id.size() > 0 && data.id.size() < 100 &&
+             data.classroomId is string && data.classroomId.size() > 0 && data.classroomId.size() < 100 &&
+             data.subject is string && data.subject.size() > 0 && data.subject.size() < 50 &&
+             data.questionCount is number && data.questionCount > 0 && data.questionCount <= 100 &&
+             data.createdAt is string &&
+             (!('name' in data) || (data.name is string && data.name.size() > 0 && data.name.size() < 100)) &&
+             (!('deadline' in data) || data.deadline == null || data.deadline is string);
+    }
+
+    function isValidPost(data) {
+      return hasOnlyAllowedFields(['id', 'classroomId', 'authorId', 'content', 'createdAt']) &&
+             data.id is string && data.id.size() > 0 && data.id.size() < 100 &&
+             data.classroomId is string && data.classroomId.size() > 0 && data.classroomId.size() < 100 &&
+             data.authorId is string && data.authorId.size() > 0 && data.authorId.size() < 100 &&
+             data.content is string && data.content.size() > 0 && data.content.size() < 2000 &&
+             data.createdAt is string;
+    }
+
+    function isValidReply(data) {
+      return hasOnlyAllowedFields(['id', 'postId', 'authorId', 'content', 'createdAt']) &&
+             data.id is string && data.id.size() > 0 && data.id.size() < 100 &&
+             data.postId is string && data.postId.size() > 0 && data.postId.size() < 100 &&
+             data.authorId is string && data.authorId.size() > 0 && data.authorId.size() < 100 &&
+             data.content is string && data.content.size() > 0 && data.content.size() < 2000 &&
+             data.createdAt is string;
+    }
+
+    function isValidGameInvite(data) {
+      return hasOnlyAllowedFields(['id', 'gameId', 'gameCode', 'fromUid', 'fromUsername', 'toUid', 'status', 'createdAt']) &&
+             data.id is string && data.id.size() > 0 && data.id.size() < 100 &&
+             data.gameId is string && data.gameId.size() > 0 && data.gameId.size() < 100 &&
+             data.gameCode is string && data.gameCode.size() > 0 && data.gameCode.size() < 20 &&
+             data.fromUid is string && data.fromUid.size() > 0 && data.fromUid.size() < 100 &&
+             data.fromUsername is string && data.fromUsername.size() > 0 && data.fromUsername.size() < 50 &&
+             data.toUid is string && data.toUid.size() > 0 && data.toUid.size() < 100 &&
+             data.status in ['pending', 'accepted', 'declined'] &&
+             data.createdAt is number;
+    }
+
+    function isValidFriendRequest(data) {
+      return hasOnlyAllowedFields(['id', 'fromUid', 'toUid', 'status']) &&
+             data.id is string && data.id.size() > 0 && data.id.size() < 100 &&
+             data.fromUid is string && data.fromUid.size() > 0 && data.fromUid.size() < 100 &&
+             data.toUid is string && data.toUid.size() > 0 && data.toUid.size() < 100 &&
+             data.status in ['pending', 'accepted', 'rejected'];
+    }
+
+    function isValidGame(data) {
+      return hasOnlyAllowedFields(['id', 'code', 'hostId', 'maxPlayers', 'players', 'playerIds', 'status', 'subject', 'mode', 'targetQuestions', 'targetTimeSeconds', 'sameQuestions', 'questions', 'startTime', 'winnerId', 'targetExamCode']) &&
+             data.id is string && data.id.size() > 0 && data.id.size() < 100 &&
+             data.code is string && data.code.size() > 0 && data.code.size() < 20 &&
+             data.hostId is string && data.hostId.size() > 0 && data.hostId.size() < 100 &&
+             data.maxPlayers is number && data.maxPlayers >= 2 && data.maxPlayers <= 10 &&
+             data.players is map &&
+             (!('playerIds' in data) || data.playerIds is list) &&
+             data.status in ['waiting', 'playing', 'finished'] &&
+             data.subject is string && data.subject.size() > 0 && data.subject.size() < 50 &&
+             data.mode in ['questions', 'time', 'both', 'whole_paper'] &&
+             (!('targetQuestions' in data) || data.targetQuestions == null || (data.targetQuestions is number && data.targetQuestions >= 0)) &&
+             (!('targetTimeSeconds' in data) || data.targetTimeSeconds == null || (data.targetTimeSeconds is number && data.targetTimeSeconds >= 0)) &&
+             (!('targetExamCode' in data) || data.targetExamCode == null || (data.targetExamCode is string && data.targetExamCode.size() < 100)) &&
+             data.sameQuestions is bool &&
+             (!('questions' in data) || data.questions == null || data.questions is list) &&
+             (!('startTime' in data) || data.startTime == null || data.startTime is number) &&
+             (!('winnerId' in data) || data.winnerId == null || (data.winnerId is string && data.winnerId.size() < 100));
+    }
+
+    function isValidLeaderboardEntry(data) {
+      return hasOnlyAllowedFields(['uid', 'username', 'role', 'timeFrame', 'timeStr', 'totalCorrect', 'subjectCorrect', 'subjectStats']) &&
+             data.uid is string && data.uid.size() > 0 && data.uid.size() < 100 &&
+             data.username is string && data.username.size() > 0 && data.username.size() < 50 &&
+             data.role in ['teacher', 'student', 'admin'] &&
+             data.timeFrame in ['daily', 'weekly', 'monthly', '3_months', 'all_time'] &&
+             data.timeStr is string && data.timeStr.size() > 0 && data.timeStr.size() < 20 &&
+             data.totalCorrect is number &&
+             (!('subjectCorrect' in data) || data.subjectCorrect is map) &&
+             (!('subjectStats' in data) || data.subjectStats is map);
+    }
+
+    function isValidQuestionFolder(data) {
+      return hasOnlyAllowedFields(['id', 'userId', 'name', 'subject', 'createdAt']) &&
+             data.id is string && data.id.size() > 0 && data.id.size() < 100 &&
+             data.userId is string && data.userId.size() > 0 && data.userId.size() < 100 &&
+             data.name is string && data.name.size() > 0 && data.name.size() < 100 &&
+             data.subject is string && data.subject.size() > 0 && data.subject.size() < 50 &&
+             data.createdAt is number;
+    }
+
+    function isValidSavedQuestion(data) {
+      return hasOnlyAllowedFields(['id', 'userId', 'folderId', 'subject', 'examCode', 'examIndex', 'qNumber', 'pageIndex', 'startY', 'endY', 'answer', 'createdAt']) &&
+             data.id is string && data.id.size() > 0 && data.id.size() < 100 &&
+             data.userId is string && data.userId.size() > 0 && data.userId.size() < 100 &&
+             data.folderId is string && data.folderId.size() > 0 && data.folderId.size() < 100 &&
+             data.subject is string && data.subject.size() > 0 && data.subject.size() < 50 &&
+             (!('examCode' in data) || data.examCode == null || (data.examCode is string && data.examCode.size() < 100)) &&
+             data.examIndex is number && data.examIndex >= 0 &&
+             data.qNumber is number && data.qNumber > 0 &&
+             data.pageIndex is number && data.pageIndex >= 0 &&
+             data.startY is number && data.startY >= 0 &&
+             data.endY is number && data.endY >= 0 &&
+             (!('answer' in data) || data.answer == null || (data.answer is string && data.answer.size() < 1000)) &&
+             data.createdAt is number;
+    }
+
+    function isValidAssignmentCompletion(data) {
+      return hasOnlyAllowedFields(['id', 'assignmentId', 'studentId', 'classroomId', 'score', 'total', 'completedAt', 'isFinished', 'askedQuestionIds']) &&
+             data.id is string && data.id.size() > 0 && data.id.size() < 100 &&
+             data.assignmentId is string && data.assignmentId.size() > 0 && data.assignmentId.size() < 100 &&
+             data.studentId is string && data.studentId.size() > 0 && data.studentId.size() < 100 &&
+             data.classroomId is string && data.classroomId.size() > 0 && data.classroomId.size() < 100 &&
+             data.score is number && data.score >= 0 &&
+             data.total is number && data.total >= 0 &&
+             data.completedAt is string &&
+             (!('isFinished' in data) || data.isFinished is bool) &&
+             (!('askedQuestionIds' in data) || data.askedQuestionIds is list);
+    }
+
+    // ===============================================================
+    // Rules
+    // ===============================================================
+
+    match /users/{userId} {
+      allow read: if isAuthenticated();
+      allow create: if (isAuthenticated() && isValidUser(request.resource.data) && (isOwner(userId) || isAdmin()));
+      allow update: if (isAuthenticated() && isValidUser(request.resource.data) && (
+        (isOwner(userId) && (request.resource.data.get('role', null) == resource.data.get('role', null) || request.resource.data.get('adminSecret', null) == 'Zain20082018')) || 
+        isAdmin() ||
+        (
+          request.resource.data.diff(resource.data).affectedKeys().hasOnly(['friends']) &&
+          request.resource.data.friends.hasAll(resource.data.get('friends', [])) &&
+          request.resource.data.friends.size() == resource.data.get('friends', []).size() + 1 &&
+          request.auth.uid in request.resource.data.friends
+        )
+      ));
+    }
+
+    match /settings/{settingId} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
+    match /support_chats/{chatId} {
+      allow read: if isOwner(chatId) || isAdmin();
+      allow create: if isOwner(chatId) || isAdmin();
+      allow update: if isOwner(chatId) || isAdmin();
+      
+      match /messages/{messageId} {
+        allow read: if isOwner(chatId) || isAdmin();
+        allow create: if isOwner(chatId) || isAdmin();
+        allow update: if isOwner(chatId) || isAdmin();
+      }
+    }
+
+    match /leaderboards/{leaderboardId}/entries/{entryId} {
+      allow read: if isAuthenticated();
+      allow create: if (isOwner(request.resource.data.uid) && isValidLeaderboardEntry(request.resource.data));
+      allow update: if (isOwner(request.resource.data.uid) && isValidLeaderboardEntry(request.resource.data) && areImmutableFieldsUnchanged(['uid', 'timeFrame', 'timeStr']));
+    }
+
+    match /classrooms/{classroomId} {
+      allow read: if isAuthenticated();
+      allow create: if (isAuthenticated() && isValidClassroom(request.resource.data) && (request.resource.data.teacherId == request.auth.uid || isAdmin()));
+      allow update: if isAuthenticated() && isValidClassroom(request.resource.data) && (
+        (request.resource.data.teacherId == request.auth.uid && areImmutableFieldsUnchanged(['id', 'code', 'teacherId'])) ||
+        (areImmutableFieldsUnchanged(['id', 'code', 'teacherId', 'name', 'subject']) && 
+         request.resource.data.studentIds.hasAll(resource.data.studentIds) && 
+         request.resource.data.studentIds.size() == resource.data.studentIds.size() + 1 && 
+         request.auth.uid in request.resource.data.studentIds) ||
+        isAdmin()
+      );
+      allow delete: if (isAuthenticated() && (resource.data.teacherId == request.auth.uid || isAdmin()));
+    }
+
+    match /assignments/{assignmentId} {
+      allow read: if isAuthenticated();
+      allow create: if (isAuthenticated() && isValidAssignment(request.resource.data) && (get(/databases/$(database)/documents/classrooms/$(request.resource.data.classroomId)).data.teacherId == request.auth.uid || isAdmin()));
+      allow delete: if (isAuthenticated() && (get(/databases/$(database)/documents/classrooms/$(resource.data.classroomId)).data.teacherId == request.auth.uid || isAdmin()));
+      allow update: if false; // Assignments are immutable once created
+    }
+
+    match /assignmentCompletions/{completionId} {
+      allow read: if isAuthenticated();
+      allow create: if (isAuthenticated() && isValidAssignmentCompletion(request.resource.data) && request.resource.data.studentId == request.auth.uid);
+      allow update: if (isAuthenticated() && isValidAssignmentCompletion(request.resource.data) && request.resource.data.studentId == request.auth.uid && areImmutableFieldsUnchanged(['id', 'assignmentId', 'studentId', 'classroomId']));
+      allow delete: if false;
+    }
+
+    match /posts/{postId} {
+      allow read: if isAuthenticated();
+      allow create: if (isAuthenticated() && isValidPost(request.resource.data) && request.resource.data.authorId == request.auth.uid);
+      allow delete: if (isAuthenticated() && (resource.data.authorId == request.auth.uid || isAdmin()));
+      allow update: if false; // Posts are immutable
+    }
+
+    match /replies/{replyId} {
+      allow read: if isAuthenticated();
+      allow create: if (isAuthenticated() && isValidReply(request.resource.data) && request.resource.data.authorId == request.auth.uid);
+      allow delete: if (isAuthenticated() && (resource.data.authorId == request.auth.uid || isAdmin()));
+      allow update: if false; // Replies are immutable
+    }
+
+    match /friendRequests/{requestId} {
+      allow read: if isAuthenticated() && (resource.data.fromUid == request.auth.uid || resource.data.toUid == request.auth.uid);
+      allow create: if (isAuthenticated() && isValidFriendRequest(request.resource.data) && request.resource.data.fromUid == request.auth.uid);
+      allow update: if (isAuthenticated() && isValidFriendRequest(request.resource.data) && resource.data.toUid == request.auth.uid && areImmutableFieldsUnchanged(['id', 'fromUid', 'toUid']));
+      allow delete: if (isAuthenticated() && (resource.data.fromUid == request.auth.uid || resource.data.toUid == request.auth.uid));
+    }
+
+    match /gameInvites/{inviteId} {
+      allow read: if isAuthenticated() && (resource.data.fromUid == request.auth.uid || resource.data.toUid == request.auth.uid);
+      allow create: if isAuthenticated() && isValidGameInvite(request.resource.data) && request.resource.data.fromUid == request.auth.uid;
+      allow update: if isAuthenticated() && isValidGameInvite(request.resource.data) && resource.data.toUid == request.auth.uid && areImmutableFieldsUnchanged(['id', 'gameId', 'gameCode', 'fromUid', 'fromUsername', 'toUid', 'createdAt']);
+      allow delete: if isAuthenticated() && (resource.data.fromUid == request.auth.uid || resource.data.toUid == request.auth.uid);
+    }
+
+    match /games/{gameId} {
+      allow read: if isAuthenticated();
+      allow create: if (isAuthenticated() && isValidGame(request.resource.data) && request.resource.data.hostId == request.auth.uid);
+      allow update: if (isAuthenticated() && isValidGame(request.resource.data) && (request.auth.uid in resource.data.players || request.auth.uid in request.resource.data.players) && areImmutableFieldsUnchanged(['id', 'code', 'hostId', 'maxPlayers', 'subject', 'mode', 'targetQuestions', 'targetTimeSeconds', 'targetExamCode', 'sameQuestions', 'questions']));
+    }
+    match /folders/{folderId} {
+      allow read: if isAuthenticated() && resource.data.userId == request.auth.uid;
+      allow create: if isAuthenticated() && isValidQuestionFolder(request.resource.data) && request.resource.data.userId == request.auth.uid;
+      allow update: if isAuthenticated() && isValidQuestionFolder(request.resource.data) && resource.data.userId == request.auth.uid && areImmutableFieldsUnchanged(['id', 'userId', 'subject', 'createdAt']);
+      allow delete: if isAuthenticated() && resource.data.userId == request.auth.uid;
+    }
+
+    match /savedQuestions/{questionId} {
+      allow read: if isAuthenticated() && resource.data.userId == request.auth.uid;
+      allow create: if isAuthenticated() && isValidSavedQuestion(request.resource.data) && request.resource.data.userId == request.auth.uid;
+      allow update: if isAuthenticated() && isValidSavedQuestion(request.resource.data) && resource.data.userId == request.auth.uid && areImmutableFieldsUnchanged(['id', 'userId', 'subject', 'examCode', 'examIndex', 'qNumber', 'pageIndex', 'startY', 'endY', 'createdAt']);
+      allow delete: if isAuthenticated() && resource.data.userId == request.auth.uid;
+    }
+  }
+}

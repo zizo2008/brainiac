@@ -1,0 +1,199 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=VT323&family=Nunito:wght@400;600;700;800&family=Rajdhani:wght@500;600;700&family=Share+Tech+Mono&display=swap');
+@import "tailwindcss";
+
+@custom-variant dark (&:is(.dark *));
+
+@layer base {
+  html {
+    font-size: 90%;
+  }
+
+  body {
+    @apply bg-slate-50 text-slate-900 transition-colors duration-200;
+  }
+
+  .dark body {
+    @apply bg-slate-900 text-slate-100;
+  }
+
+  /* Theme Overrides */
+  html[data-theme='retro'] body {
+    font-family: 'VT323', monospace;
+    background-color: #000;
+    background-image: linear-gradient(rgba(255, 255, 255, 0.05) 1px, transparent 1px), linear-gradient(90deg, rgba(255, 255, 255, 0.05) 1px, transparent 1px);
+    background-size: 20px 20px;
+    color: #fff;
+  }
+
+  html[data-theme='pink'] body {
+    font-family: 'Nunito', sans-serif;
+    background-color: #fdf2f8;
+    color: #db2777;
+  }
+
+  html[data-theme='space'] body {
+    font-family: 'Rajdhani', sans-serif;
+    background-color: #000;
+    background-image:
+      radial-gradient(2px 2px at 20px 30px, #ffffff, rgba(0, 0, 0, 0)),
+      radial-gradient(2px 2px at 40px 70px, #ffffff, rgba(0, 0, 0, 0)),
+      radial-gradient(2px 2px at 50px 160px, #ffffff, rgba(0, 0, 0, 0)),
+      radial-gradient(2px 2px at 90px 40px, #ffffff, rgba(0, 0, 0, 0)),
+      radial-gradient(2px 2px at 130px 80px, #ffffff, rgba(0, 0, 0, 0)),
+      radial-gradient(2px 2px at 160px 120px, #ffffff, rgba(0, 0, 0, 0)),
+      radial-gradient(3px 3px at 200px 50px, #ffffff, rgba(0, 0, 0, 0)),
+      radial-gradient(4px 4px at 250px 150px, #ffffff, rgba(0, 0, 0, 0)),
+      radial-gradient(100px 100px at 80% 20%, rgba(139, 92, 246, 0.2), rgba(0, 0, 0, 0)),
+      radial-gradient(150px 150px at 20% 80%, rgba(56, 189, 248, 0.2), rgba(0, 0, 0, 0));
+    background-repeat: repeat;
+    background-size: 300px 300px, 300px 300px, 300px 300px, 300px 300px, 300px 300px, 300px 300px, 300px 300px, 300px 300px, 100% 100%, 100% 100%;
+    color: #e0e7ff;
+  }
+
+  html[data-theme='scientist'] body {
+    font-family: 'Share Tech Mono', monospace;
+    background-color: #022c22;
+    background-image: radial-gradient(rgba(52, 211, 153, 0.15) 2px, transparent 2px);
+    background-size: 30px 30px;
+    color: #a7f3d0;
+  }
+}
+
+@layer utilities {
+  .pattern-space {
+    background-image:
+      radial-gradient(2px 2px at 20px 30px, #ffffff, rgba(0, 0, 0, 0)),
+      radial-gradient(2px 2px at 40px 70px, #ffffff, rgba(0, 0, 0, 0)),
+      radial-gradient(2px 2px at 50px 160px, #ffffff, rgba(0, 0, 0, 0)),
+      radial-gradient(2px 2px at 90px 40px, #ffffff, rgba(0, 0, 0, 0));
+    background-size: 100px 100px;
+  }
+
+  .pattern-scientist {
+    background-image: radial-gradient(circle at center, rgba(52, 211, 153, 0.2) 0, rgba(52, 211, 153, 0.2) 4px, transparent 4px);
+    background-size: 20px 20px;
+  }
+
+  .pattern-retro {
+    background-image: linear-gradient(rgba(255, 255, 255, 0.1) 1px, transparent 1px), linear-gradient(90deg, rgba(255, 255, 255, 0.1) 1px, transparent 1px);
+    background-size: 10px 10px;
+  }
+
+  .pattern-pink {
+    background-image: radial-gradient(circle at center, rgba(255, 255, 255, 0.4) 0, rgba(255, 255, 255, 0.4) 3px, transparent 3px);
+    background-size: 16px 16px;
+  }
+
+  .custom-scrollbar::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+  }
+
+  .custom-scrollbar::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  .custom-scrollbar::-webkit-scrollbar-thumb {
+    @apply bg-slate-200 dark:bg-slate-700 rounded-full;
+  }
+
+  .custom-scrollbar::-webkit-scrollbar-thumb:hover {
+    @apply bg-slate-300 dark:bg-slate-600;
+  }
+
+  .scrollbar-hide::-webkit-scrollbar {
+    display: none;
+  }
+
+  .scrollbar-hide {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+
+  @keyframes coin-collect {
+    0% {
+      transform: translateY(0) scale(1);
+      opacity: 1;
+    }
+
+    100% {
+      transform: translateY(-50px) scale(1.5);
+      opacity: 0;
+    }
+  }
+
+  .animate-coin {
+    animation: coin-collect 0.8s ease-out forwards;
+  }
+
+  @keyframes shimmer {
+    0% {
+      transform: translateX(-100%) skewX(-15deg);
+    }
+
+    100% {
+      transform: translateX(200%) skewX(-15deg);
+    }
+  }
+
+  .animate-shimmer {
+    animation: shimmer 1s ease-in-out forwards;
+  }
+
+  @keyframes shooting-star {
+    0% {
+      transform: translate(-100%, -100%) rotate(-45deg);
+      opacity: 1;
+    }
+
+    100% {
+      transform: translate(300%, 300%) rotate(-45deg);
+      opacity: 0;
+    }
+  }
+
+  .animate-shooting-star {
+    animation: shooting-star 0.8s linear forwards;
+  }
+
+  @keyframes supernova {
+    0% {
+      transform: scale(0);
+      opacity: 1;
+    }
+
+    100% {
+      transform: scale(4);
+      opacity: 0;
+    }
+  }
+
+  .animate-supernova {
+    animation: supernova 0.8s ease-out forwards;
+  }
+
+  @keyframes bubble-pop {
+    0% {
+      transform: translateY(0) scale(0.5);
+      opacity: 0;
+    }
+
+    20% {
+      opacity: 1;
+    }
+
+    80% {
+      transform: translateY(-30px) scale(1.2);
+      opacity: 0.8;
+    }
+
+    100% {
+      transform: translateY(-40px) scale(1.5);
+      opacity: 0;
+    }
+  }
+
+  .animate-bubble {
+    animation: bubble-pop 0.8s ease-out forwards;
+  }
+}

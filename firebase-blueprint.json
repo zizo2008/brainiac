@@ -1,0 +1,220 @@
+{
+  "entities": {
+    "User": {
+      "title": "User",
+      "description": "User profile containing role, stats, and friends.",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string" },
+        "username": { "type": "string" },
+        "role": { "type": "string", "enum": ["teacher", "student"] },
+        "totalCorrect": { "type": "number" },
+        "subjectCorrect": {
+          "type": "object",
+          "properties": {
+            "chemistry": { "type": "number" },
+            "physics": { "type": "number" },
+            "biology": { "type": "number" }
+          }
+        },
+        "friends": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "isPremium": { "type": "boolean" },
+        "hintsRemaining": { "type": "number" },
+        "lastHintResetDate": { "type": "string" }
+      },
+      "required": ["uid", "username", "role", "totalCorrect", "subjectCorrect", "friends"]
+    },
+    "Classroom": {
+      "title": "Classroom",
+      "description": "A classroom created by a teacher.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "code": { "type": "string" },
+        "teacherId": { "type": "string" },
+        "name": { "type": "string" },
+        "studentIds": {
+          "type": "array",
+          "items": { "type": "string" }
+        }
+      },
+      "required": ["id", "code", "teacherId", "name", "studentIds"]
+    },
+    "Assignment": {
+      "title": "Assignment",
+      "description": "An assignment created by a teacher in a classroom.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "classroomId": { "type": "string" },
+        "subject": { "type": "string" },
+        "questionCount": { "type": "number" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "classroomId", "subject", "questionCount", "createdAt"]
+    },
+    "Post": {
+      "title": "Post",
+      "description": "A post created by a teacher in a classroom.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "classroomId": { "type": "string" },
+        "authorId": { "type": "string" },
+        "content": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "classroomId", "authorId", "content", "createdAt"]
+    },
+    "Reply": {
+      "title": "Reply",
+      "description": "A reply to a post by a student or teacher.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "postId": { "type": "string" },
+        "authorId": { "type": "string" },
+        "content": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "postId", "authorId", "content", "createdAt"]
+    },
+    "FriendRequest": {
+      "title": "FriendRequest",
+      "description": "A friend request between two users.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "fromUid": { "type": "string" },
+        "toUid": { "type": "string" },
+        "status": { "type": "string", "enum": ["pending", "accepted", "rejected"] }
+      },
+      "required": ["id", "fromUid", "toUid", "status"]
+    },
+    "Game": {
+      "title": "Game",
+      "description": "A multiplayer game session.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "code": { "type": "string" },
+        "hostId": { "type": "string" },
+        "guestId": { "type": "string" },
+        "status": { "type": "string", "enum": ["waiting", "playing", "finished"] },
+        "subject": { "type": "string" },
+        "mode": { "type": "string", "enum": ["questions", "time", "both"] },
+        "targetQuestions": { "type": "number" },
+        "targetTimeSeconds": { "type": "number" },
+        "sameQuestions": { "type": "boolean" },
+        "questions": { "type": "array", "items": { "type": "object" } },
+        "hostScore": { "type": "number" },
+        "guestScore": { "type": "number" },
+        "hostProgress": { "type": "number" },
+        "guestProgress": { "type": "number" },
+        "startTime": { "type": "number" },
+        "winnerId": { "type": "string" }
+      },
+      "required": ["id", "code", "hostId", "status", "subject", "mode", "sameQuestions", "hostScore", "guestScore", "hostProgress", "guestProgress"]
+    },
+    "LeaderboardEntry": {
+      "title": "LeaderboardEntry",
+      "description": "A leaderboard entry for a specific time frame.",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string" },
+        "username": { "type": "string" },
+        "role": { "type": "string" },
+        "timeFrame": { "type": "string", "enum": ["daily", "weekly", "monthly", "3_months", "all_time"] },
+        "timeStr": { "type": "string" },
+        "totalCorrect": { "type": "number" },
+        "subjectCorrect": {
+          "type": "object",
+          "properties": {
+            "chemistry": { "type": "number" },
+            "physics": { "type": "number" },
+            "biology": { "type": "number" }
+          }
+        }
+      },
+      "required": ["uid", "username", "role", "timeFrame", "timeStr", "totalCorrect", "subjectCorrect"]
+    },
+    "QuestionFolder": {
+      "title": "QuestionFolder",
+      "description": "A folder to store saved questions.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "userId": { "type": "string" },
+        "name": { "type": "string" },
+        "subject": { "type": "string" },
+        "createdAt": { "type": "number" }
+      },
+      "required": ["id", "userId", "name", "subject", "createdAt"]
+    },
+    "SavedQuestion": {
+      "title": "SavedQuestion",
+      "description": "A question saved by a user.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "userId": { "type": "string" },
+        "folderId": { "type": "string" },
+        "subject": { "type": "string" },
+        "examCode": { "type": "string" },
+        "examIndex": { "type": "number" },
+        "qNumber": { "type": "number" },
+        "pageIndex": { "type": "number" },
+        "startY": { "type": "number" },
+        "endY": { "type": "number" },
+        "answer": { "type": "string" },
+        "createdAt": { "type": "number" }
+      },
+      "required": ["id", "userId", "folderId", "subject", "examIndex", "qNumber", "pageIndex", "startY", "endY", "createdAt"]
+    }
+  },
+  "firestore": {
+    "/folders/{folderId}": {
+      "schema": { "$ref": "#/entities/QuestionFolder" },
+      "description": "Stores user question folders."
+    },
+    "/savedQuestions/{questionId}": {
+      "schema": { "$ref": "#/entities/SavedQuestion" },
+      "description": "Stores user saved questions."
+    },
+    "/users/{userId}": {
+      "schema": { "$ref": "#/entities/User" },
+      "description": "Stores user profiles."
+    },
+    "/leaderboards/{leaderboardId}/entries/{entryId}": {
+      "schema": { "$ref": "#/entities/LeaderboardEntry" },
+      "description": "Stores leaderboard entries."
+    },
+    "/classrooms/{classroomId}": {
+      "schema": { "$ref": "#/entities/Classroom" },
+      "description": "Stores classrooms."
+    },
+    "/assignments/{assignmentId}": {
+      "schema": { "$ref": "#/entities/Assignment" },
+      "description": "Stores assignments."
+    },
+    "/posts/{postId}": {
+      "schema": { "$ref": "#/entities/Post" },
+      "description": "Stores posts in a classroom."
+    },
+    "/replies/{replyId}": {
+      "schema": { "$ref": "#/entities/Reply" },
+      "description": "Stores replies to posts."
+    },
+    "/friendRequests/{requestId}": {
+      "schema": { "$ref": "#/entities/FriendRequest" },
+      "description": "Stores friend requests."
+    },
+    "/games/{gameId}": {
+      "schema": { "$ref": "#/entities/Game" },
+      "description": "Stores multiplayer games."
+    }
+  }
+}
