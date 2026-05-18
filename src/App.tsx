@@ -428,12 +428,31 @@ export default function App() {
   useEffect(() => {
     // Preload PDFs in the background for the current level
     const preloadPdfs = async () => {
-      const subjects: Subject[] = ['chemistry', 'physics', 'biology', 'economics', 'accounting'];
+      const allSubjects: Subject[] = ['chemistry', 'physics', 'biology', 'economics', 'accounting'];
       
-      for (const subj of subjects) {
+      const loadQueue: { subj: Subject, lvl: Level }[] = [];
+      
+      if (userProfile?.prioritizedSubjects && userProfile.prioritizedSubjects.length > 0) {
+        userProfile.prioritizedSubjects.forEach(p => {
+          const levelsToLoad = p.levels && p.levels.length > 0 ? p.levels : ((p as any).level ? [(p as any).level as Level] : ['extended' as Level]);
+          levelsToLoad.forEach(lvl => {
+            if (!loadQueue.some(q => q.subj === p.subject && q.lvl === lvl)) {
+              loadQueue.push({ subj: p.subject as Subject, lvl });
+            }
+          });
+        });
+      }
+      
+      allSubjects.forEach(subj => {
+        if (!loadQueue.some(q => q.subj === subj && q.lvl === level)) {
+          loadQueue.push({ subj, lvl: level });
+        }
+      });
+      
+      for (const { subj, lvl } of loadQueue) {
         try {
-          const fileName = getFileName(subj, level);
-          const cacheKey = getCacheKey(subj, level);
+          const fileName = getFileName(subj, lvl);
+          const cacheKey = getCacheKey(subj, lvl);
           
           // Skip if already preloaded
           if (preloadedPdfsRef.current[fileName]) continue;
@@ -447,10 +466,10 @@ export default function App() {
             
             // Start background parsing for this subject and level
             const parseAllBackground = async () => {
-              const cache = getCache(subj, level);
+              const cache = getCache(subj, lvl);
               while (!cache.isFinished && !cache.stopParsing) {
                 if (!cache.isParsing) {
-                  await parseMorePages(loadedPdf, subj, level, 10);
+                  await parseMorePages(loadedPdf, subj, lvl, 10);
                 } else {
                   await new Promise(resolve => setTimeout(resolve, 500));
                 }
@@ -459,7 +478,7 @@ export default function App() {
             parseAllBackground();
           }
         } catch (e) {
-          console.error(`Failed to preload ${subj} for level ${level}:`, e);
+          console.error(`Failed to preload ${subj} for level ${lvl}:`, e);
         }
         // Wait a bit between starting background parsing tasks to prevent initial lag
         await new Promise(resolve => setTimeout(resolve, 1000));
@@ -467,7 +486,7 @@ export default function App() {
     };
     // Start preloading after a short delay to prioritize initial render
     setTimeout(preloadPdfs, 1000);
-  }, [level]); // Re-run when level changes
+  }, [level, userProfile?.prioritizedSubjects]); // Re-run when level or prioritized subjects change
   const [questions, setQuestions] = useState<Question[]>([]);
   const [currentQuestion, setCurrentQuestion] = useState<Question | null>(null);
   const [questionImage, setQuestionImage] = useState<string | null>(null);

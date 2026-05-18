@@ -1,5 +1,11 @@
 export type Level = 'extended' | 'core' | 'a_level';
 export type PremiumPlan = 'brainiac_one' | 'al_pack' | 'ol_pack' | 'core_pack';
+export type SubjectType = 'chemistry' | 'physics' | 'biology' | 'economics' | 'accounting';
+
+export interface UserSubjectChoice {
+  subject: SubjectType;
+  levels: Level[];
+}
 
 export interface Question {
   examIndex: number;
@@ -43,6 +49,7 @@ export interface UserProfile {
   dailyEconAnswered?: number;
   lastEconResetDate?: string;
   friends: string[];
+  prioritizedSubjects?: UserSubjectChoice[];
 }
 
 export interface Classroom {

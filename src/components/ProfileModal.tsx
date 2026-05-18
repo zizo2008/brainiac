@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { ThemeIcon } from './ThemeIcon';
-import { UserProfile, Game } from '../types';
+import { UserProfile, Game, UserSubjectChoice, SubjectType, Level } from '../types';
 import { updateUserProfile } from '../services/db';
 import { auth, db } from '../firebase';
 import { updatePassword } from 'firebase/auth';
@@ -44,6 +44,36 @@ export default function ProfileModal({ isOpen, onClose, userProfile, currentUser
   const [recentGames, setRecentGames] = useState<Game[]>([]);
   const [loadingGames, setLoadingGames] = useState(true);
   const [friendRequestSent, setFriendRequestSent] = useState(false);
+  const [prioritizedSubjects, setPrioritizedSubjects] = useState<UserSubjectChoice[]>(userProfile?.prioritizedSubjects || []);
+
+  const handleToggleSubject = (subject: SubjectType) => {
+    setPrioritizedSubjects(prev => {
+      const exists = prev.find(p => p.subject === subject);
+      if (exists) {
+        return prev.filter(p => p.subject !== subject);
+      } else {
+        return [...prev, { subject, levels: ['extended'] }];
+      }
+    });
+  };
+
+  const handleToggleSubjectLevel = (subject: SubjectType, level: Level) => {
+    setPrioritizedSubjects(prev => 
+      prev.map(p => {
+        if (p.subject === subject) {
+          const levels = p.levels || [];
+          if (levels.includes(level)) {
+            const newLevels = levels.filter(l => l !== level);
+            if (newLevels.length === 0) return p; // Prevent removing the last selected level
+            return { ...p, levels: newLevels };
+          } else {
+            return { ...p, levels: [...levels, level] };
+          }
+        }
+        return p;
+      })
+    );
+  };
 
   const isOwnProfile = !currentUserProfile || currentUserProfile.uid === userProfile?.uid;
 
@@ -88,6 +118,7 @@ export default function ProfileModal({ isOpen, onClose, userProfile, currentUser
       setUsername(userProfile.username);
       setPhotoURL(userProfile.photoURL || '');
       setTheme(activeTheme);
+      setPrioritizedSubjects(userProfile.prioritizedSubjects || []);
     }
   }, [userProfile, activeTheme]);
 
@@ -164,7 +195,7 @@ export default function ProfileModal({ isOpen, onClose, userProfile, currentUser
     setError('');
     setSuccess('');
     try {
-      const updates = { username, photoURL, theme };
+      const updates = { username, photoURL, theme, prioritizedSubjects };
       await updateUserProfile(userProfile.uid, updates);
       setSuccess('Profile updated successfully!');
       setTimeout(() => setSuccess(''), 3000);
@@ -541,6 +572,61 @@ export default function ProfileModal({ isOpen, onClose, userProfile, currentUser
                             {t}
                           </button>
                         ))}
+                      </div>
+                    </div>
+
+                    <div>
+                      <label className={`block text-[8px] sm:text-[10px] font-black ${themes[activeTheme].textSecondary} uppercase tracking-widest mb-1.5 sm:mb-2 flex items-center justify-between`}>
+                        <span>Prioritized Subjects</span>
+                        <span className="opacity-70 text-[8px] font-medium lowercase">Speed up loading on all devices</span>
+                      </label>
+                      <div className="space-y-2">
+                        {(['chemistry', 'physics', 'biology', 'economics', 'accounting'] as SubjectType[]).map((subj) => {
+                          const isSelected = prioritizedSubjects.some(p => p.subject === subj);
+                          const selectedLevels = prioritizedSubjects.find(p => p.subject === subj)?.levels || [];
+                          
+                          const availableLevels: { val: Level, label: string }[] = [];
+                          if (subj !== 'accounting' && subj !== 'economics') {
+                            availableLevels.push({ val: 'core', label: 'Core' });
+                            availableLevels.push({ val: 'extended', label: 'Ext' });
+                          } else {
+                            availableLevels.push({ val: 'extended', label: 'OL' });
+                          }
+                          availableLevels.push({ val: 'a_level', label: 'AL' });
+                          
+                          return (
+                            <div key={subj} className={`flex items-center justify-between p-2 sm:p-3 rounded-xl border-2 transition-all ${isSelected ? `${themes[activeTheme].accentBg} border-transparent` : `${themes[activeTheme].button} border-transparent`}`}>
+                              <button 
+                                onClick={() => handleToggleSubject(subj)}
+                                className="flex items-center gap-2 flex-1 text-left"
+                              >
+                                <div className={`w-4 h-4 sm:w-5 sm:h-5 rounded flex items-center justify-center border-2 ${isSelected ? 'bg-white border-white' : `border-current opacity-50`}`}>
+                                  {isSelected && <ThemeIcon icon="CheckCircle2" theme={activeTheme} className={`w-3 h-3 sm:w-4 sm:h-4 text-indigo-500`} />}
+                                </div>
+                                <span className={`text-[10px] sm:text-xs font-black uppercase tracking-widest ${isSelected ? 'text-white' : ''}`}>
+                                  {subj}
+                                </span>
+                              </button>
+                              
+                              {isSelected && (
+                                <div className="flex gap-1 sm:gap-2">
+                                  {availableLevels.map(lvl => {
+                                    const isLvlSelected = selectedLevels.includes(lvl.val);
+                                    return (
+                                      <button 
+                                        key={lvl.val}
+                                        onClick={() => handleToggleSubjectLevel(subj, lvl.val)}
+                                        className={`px-2 py-1 rounded-md text-[9px] font-black uppercase tracking-widest transition-colors border border-transparent ${isLvlSelected ? 'bg-white text-indigo-900 shadow-sm' : 'bg-black/20 text-white hover:bg-black/30'}`}
+                                      >
+                                        {lvl.label}
+                                      </button>
+                                    );
+                                  })}
+                                </div>
+                              )}
+                            </div>
+                          );
+                        })}
                       </div>
                     </div>
                   </div>
