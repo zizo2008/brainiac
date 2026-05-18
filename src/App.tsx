@@ -26,6 +26,7 @@ import AdminDashboard from './components/AdminDashboard';
 import { motion, AnimatePresence } from 'motion/react';
 import Navbar from './components/Navbar';
 import ProfileModal from './components/ProfileModal';
+import SubjectOnboardingModal from './components/SubjectOnboardingModal';
 import FriendHubModal from './components/FriendHubModal';
 import { themes, ThemeName } from './theme';
 // @ts-ignore
@@ -213,7 +214,7 @@ export default function App() {
   const [activeGame, setActiveGame] = useState<any>(null);
   const [isAdminUnlocked, setIsAdminUnlocked] = useState(false);
   const [isProfileModalOpen, setIsProfileModalOpen] = useState(false);
-  const [profileInitialView, setProfileInitialView] = useState<'profile' | 'settings'>('profile');
+  const [isSubjectOnboardingModalOpen, setIsSubjectOnboardingModalOpen] = useState(false);
   const [isFriendHubModalOpen, setIsFriendHubModalOpen] = useState(false);
   const [showPremiumModal, setShowPremiumModal] = useState(false);
   const hasShownPremiumModalRef = useRef(false);
@@ -351,8 +352,7 @@ export default function App() {
         }
 
         if (data.role !== 'teacher' && (!data.prioritizedSubjects || data.prioritizedSubjects.length === 0) && !hasShownSubjectsModalRef.current) {
-          setProfileInitialView('settings');
-          setIsProfileModalOpen(true);
+          setIsSubjectOnboardingModalOpen(true);
           hasShownSubjectsModalRef.current = true;
         }
       } else {
@@ -2364,10 +2364,7 @@ export default function App() {
         <>
           <Navbar 
             userProfile={userProfile}
-            onOpenProfile={() => {
-              setProfileInitialView('profile');
-              setIsProfileModalOpen(true);
-            }}
+            onOpenProfile={() => setIsProfileModalOpen(true)}
             onOpenFriendHub={() => setIsFriendHubModalOpen(true)}
             onBack={handleBack}
             showBack={screen !== 'dashboard'}
@@ -2388,7 +2385,16 @@ export default function App() {
                 profileLoaded={profileLoaded}
                 activeTheme={activeTheme}
                 setActiveTheme={setActiveTheme}
-                initialView={profileInitialView}
+              />
+            )}
+          </AnimatePresence>
+          <AnimatePresence>
+            {isSubjectOnboardingModalOpen && (
+              <SubjectOnboardingModal 
+                isOpen={isSubjectOnboardingModalOpen}
+                onClose={() => setIsSubjectOnboardingModalOpen(false)}
+                userProfile={userProfile}
+                activeTheme={activeTheme}
               />
             )}
           </AnimatePresence>

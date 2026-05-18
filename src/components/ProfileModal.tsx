@@ -19,7 +19,6 @@ interface Props {
   profileLoaded?: boolean;
   activeTheme: ThemeName;
   setActiveTheme?: (theme: ThemeName) => void;
-  initialView?: 'profile' | 'settings';
 }
 
 const DEFAULT_AVATARS = [
@@ -31,11 +30,11 @@ const DEFAULT_AVATARS = [
   'https://picsum.photos/seed/brain6/200',
 ];
 
-export default function ProfileModal({ isOpen, onClose, userProfile, currentUserProfile, onLogout, isGuest, profileLoaded, activeTheme, setActiveTheme, initialView }: Props) {
+export default function ProfileModal({ isOpen, onClose, userProfile, currentUserProfile, onLogout, isGuest, profileLoaded, activeTheme, setActiveTheme }: Props) {
   const [username, setUsername] = useState(userProfile?.username || '');
   const [photoURL, setPhotoURL] = useState(userProfile?.photoURL || '');
   const [isSaving, setIsSaving] = useState(false);
-  const [view, setView] = useState<'profile' | 'settings'>(initialView || 'profile');
+  const [view, setView] = useState<'profile' | 'settings'>('profile');
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [isChangingPassword, setIsChangingPassword] = useState(false);
