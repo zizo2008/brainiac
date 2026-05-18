@@ -213,9 +213,11 @@ export default function App() {
   const [activeGame, setActiveGame] = useState<any>(null);
   const [isAdminUnlocked, setIsAdminUnlocked] = useState(false);
   const [isProfileModalOpen, setIsProfileModalOpen] = useState(false);
+  const [profileInitialView, setProfileInitialView] = useState<'profile' | 'settings'>('profile');
   const [isFriendHubModalOpen, setIsFriendHubModalOpen] = useState(false);
   const [showPremiumModal, setShowPremiumModal] = useState(false);
   const hasShownPremiumModalRef = useRef(false);
+  const hasShownSubjectsModalRef = useRef(false);
   const localAnswerCountRef = useRef<number | null>(null);
 
   useEffect(() => {
@@ -346,6 +348,12 @@ export default function App() {
         if (!isGlobalPremium(data) && data.role !== 'teacher' && !hasShownPremiumModalRef.current) {
           setShowPremiumModal(true);
           hasShownPremiumModalRef.current = true;
+        }
+
+        if (data.role !== 'teacher' && (!data.prioritizedSubjects || data.prioritizedSubjects.length === 0) && !hasShownSubjectsModalRef.current) {
+          setProfileInitialView('settings');
+          setIsProfileModalOpen(true);
+          hasShownSubjectsModalRef.current = true;
         }
       } else {
         // Profile missing - create a default one
@@ -2356,7 +2364,10 @@ export default function App() {
         <>
           <Navbar 
             userProfile={userProfile}
-            onOpenProfile={() => setIsProfileModalOpen(true)}
+            onOpenProfile={() => {
+              setProfileInitialView('profile');
+              setIsProfileModalOpen(true);
+            }}
             onOpenFriendHub={() => setIsFriendHubModalOpen(true)}
             onBack={handleBack}
             showBack={screen !== 'dashboard'}
@@ -2377,6 +2388,7 @@ export default function App() {
                 profileLoaded={profileLoaded}
                 activeTheme={activeTheme}
                 setActiveTheme={setActiveTheme}
+                initialView={profileInitialView}
               />
             )}
           </AnimatePresence>
