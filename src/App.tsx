@@ -567,6 +567,17 @@ export default function App() {
   const loadSubjectPdf = async (subj: Subject, restoreState?: { stats: {total: number, correct: number}, askedQuestionIds: string[] }, vaultQuestion?: any) => {
     setSubject(subj);
     
+    // Instantly show the loading screen for the quiz
+    if (!restoreState && !vaultQuestion && quizMode !== 'whole_paper') {
+      setScreen('quiz');
+      setQuestionImage('loading');
+      setCurrentQuestion(null);
+      setEliminatedOptions([]);
+      setShowHintTip(false);
+      setHintTipText('');
+      setHintTimer(0);
+    }
+    
     const cache = getCache(subj, level);
     setQuestions([...cache.validQuestions]);
     const exams = Object.entries(cache.examCodes).map(([index, code]) => ({ index: Number(index), code: code as string }));
@@ -657,7 +668,7 @@ export default function App() {
             pickRandomQuestion(loadedPdf, restoredSet, subj);
           } else {
             setStats({ total: 0, correct: 0 });
-            setScreen('quiz');
+            // Screen is already set to 'quiz' at the start
             const cacheKey = getCacheKey(subj, level);
             if (preRenderedQuestionsRef.current[cacheKey]) {
               const preRendered = preRenderedQuestionsRef.current[cacheKey];
