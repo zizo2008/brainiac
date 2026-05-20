@@ -396,6 +396,7 @@ export default function App() {
   
   const [pdf, setPdf] = useState<pdfjsLib.PDFDocumentProxy | null>(null);
   const preloadedPdfsRef = useRef<Record<string, pdfjsLib.PDFDocumentProxy>>({});
+  const preRenderedQuestionsRef = useRef<Record<string, {question: any, image: string}>>({});
 
   const subjectCachesRef = useRef<Record<string, ParserState>>({});
 
@@ -500,6 +501,22 @@ export default function App() {
               }
             } catch (err) {
               console.error(`Failed to load pre-parsed JSON for ${subj} ${lvl}:`, err);
+            }
+          }
+          
+          const cache = getCache(subj, lvl);
+          if (cache.validQuestions.length > 0 && !preloadedPdfsRef.current[fileName]) {
+            const pdfUrl = `/${fileName}.pdf`;
+            const pdfjsLibInstance = await getPdfJs();
+            const preloadedPdf = await pdfjsLibInstance.getDocument({ url: pdfUrl }).promise;
+            preloadedPdfsRef.current[fileName] = preloadedPdf;
+            
+            const randomQ = cache.validQuestions[Math.floor(Math.random() * cache.validQuestions.length)];
+            try {
+              const img = await renderQuestionImage(preloadedPdf, randomQ);
+              preRenderedQuestionsRef.current[cacheKey] = { question: randomQ, image: img };
+            } catch (e) {
+              // Ignore pre-render errors
             }
           }
         } catch (e) {
@@ -640,9 +657,19 @@ export default function App() {
             pickRandomQuestion(loadedPdf, restoredSet, subj);
           } else {
             setStats({ total: 0, correct: 0 });
-            setAskedQuestionIds(new Set());
             setScreen('quiz');
-            pickRandomQuestion(loadedPdf, new Set(), subj);
+            const cacheKey = getCacheKey(subj, level);
+            if (preRenderedQuestionsRef.current[cacheKey]) {
+              const preRendered = preRenderedQuestionsRef.current[cacheKey];
+              setCurrentQuestion(preRendered.question);
+              setQuestionImage(preRendered.image);
+              setAskedQuestionIds(new Set([`${preRendered.question.examIndex}-${preRendered.question.qNumber}`]));
+              console.log("Used INSTANT pre-rendered question");
+              delete preRenderedQuestionsRef.current[cacheKey];
+            } else {
+              setAskedQuestionIds(new Set());
+              pickRandomQuestion(loadedPdf, new Set(), subj);
+            }
           }
         } else {
           setErrorMessage(`Could not find any valid questions with answers in ${fileName}.pdf.`);
