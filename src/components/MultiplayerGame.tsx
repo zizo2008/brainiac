@@ -6,16 +6,13 @@ import { getPdfUrl } from '../utils/pdfMap';
 import { updateGameProgress, finishGame, updateStats, updateMultiplayerStats } from '../services/db';
 import { generateSeededQuestions } from '../utils/random';
 import { ThemeIcon } from './ThemeIcon';
-import * as pdfjsLib from 'pdfjs-dist';
-import { createInitialParserState, parseMorePages, renderQuestionImage, ParserState } from '../utils/pdfParser';
+import type * as pdfjsLib from 'pdfjs-dist';
+import { getPdfJs } from '../utils/pdfjs';
+import { renderQuestionImage } from '../utils/pdfParser';
 import WholePaperQuiz from './WholePaperQuiz';
 import { isGlobalPremium, hasPremiumForLevel } from '../utils/premium';
 import { motion } from 'motion/react';
-// @ts-ignore
-import pdfWorker from 'pdfjs-dist/build/pdf.worker.min.js?url';
 
-// Set worker path
-pdfjsLib.GlobalWorkerOptions.workerSrc = pdfWorker;
 
 import { ThemeName, themes } from '../theme';
 
@@ -134,38 +131,25 @@ export default function MultiplayerGame({ game, userProfile, onExit, activeTheme
         const response = await fetch(pdfUrl);
         if (!response.ok) throw new Error(`Failed to fetch ${fileName}.pdf`);
         const arrayBuffer = await response.arrayBuffer();
-        pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+        const pdfjsLibInstance = await getPdfJs();
+        pdf = await pdfjsLibInstance.getDocument({ data: arrayBuffer }).promise;
       } catch (err) {
         throw new Error(`Error loading PDF: Failed to fetch ${fileName}.pdf from storage. Please check your connection.`);
       }
       loadedPdfRef.current = pdf;
       
-      parserStateRef.current = createInitialParserState();
-      
-      // Parse initial batch with 2s timeout
-      let { state } = await parseMorePages(pdf, parserStateRef.current, 50, 2000);
-      parserStateRef.current = state;
-      
-      if (game.mode === 'whole_paper' && game.targetExamCode) {
-        setLoadingMsg(`Finding exam ${game.targetExamCode}...`);
-        // Keep parsing until we find the exam and finish parsing it
-        while (!parserStateRef.current.isFinished) {
-          const targetExamIndex = Object.keys(parserStateRef.current.examCodes).find(
-            key => parserStateRef.current.examCodes[Number(key)] === game.targetExamCode
-          );
-          
-          if (targetExamIndex && parserStateRef.current.currentExamIndex > Number(targetExamIndex)) {
-            // We found it and moved past it, so it's fully parsed
-            break;
-          }
-          
-          const res = await parseMorePages(pdf, parserStateRef.current, 50, 2000);
-          parserStateRef.current = res.state;
+      let validQs: any[] = [];
+      try {
+        const res = await fetch(`/data/${fileName}.json`);
+        if (res.ok) {
+          const data = await res.json();
+          validQs = data.validQuestions || [];
         }
+      } catch (err) {
+        console.error("Failed to load pre-parsed JSON", err);
       }
-
-      if (parserStateRef.current.validQuestions.length > 0) {
-        const validQs = parserStateRef.current.validQuestions;
+      
+      if (validQs.length > 0) {
         
         let generatedQs: any[] = [];
         if (game.mode === 'whole_paper' && game.targetExamCode) {
@@ -198,12 +182,7 @@ export default function MultiplayerGame({ game, userProfile, onExit, activeTheme
         setPdfLoaded(true);
         renderQuestion(generatedQs[0]);
         
-        // Background parse
-        if (game.mode !== 'whole_paper') {
-          setTimeout(() => {
-            parseMorePages(pdf, parserStateRef.current, 100);
-          }, 100);
-        }
+
       } else {
         setLoadingMsg("Failed to load questions. Please try again.");
       }

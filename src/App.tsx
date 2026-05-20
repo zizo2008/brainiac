@@ -1,5 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
-import * as pdfjsLib from 'pdfjs-dist';
+import type * as pdfjsLib from 'pdfjs-dist';
+import { getPdfJs } from './utils/pdfjs';
+import { setCache, getCacheData } from './utils/indexedDB';
 import { ThemeIcon } from './components/ThemeIcon';
 import { GoogleGenAI } from '@google/genai';
 import { auth, db } from './firebase';
@@ -29,10 +31,6 @@ import ProfileModal from './components/ProfileModal';
 import SubjectOnboardingModal from './components/SubjectOnboardingModal';
 import FriendHubModal from './components/FriendHubModal';
 import { themes, ThemeName } from './theme';
-// @ts-ignore
-import pdfWorker from 'pdfjs-dist/build/pdf.worker.min.js?url';
-
-pdfjsLib.GlobalWorkerOptions.workerSrc = pdfWorker;
 
 
 
@@ -465,25 +463,44 @@ export default function App() {
           // Skip if already preloaded
           if (preloadedPdfsRef.current[fileName]) continue;
           
-          const pdfUrl = getPdfUrl(fileName);
-          const response = await fetch(pdfUrl);
-          if (response.ok) {
-            const arrayBuffer = await response.arrayBuffer();
-            const loadedPdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
-            preloadedPdfsRef.current[fileName] = loadedPdf;
-            
-            // Start background parsing for this subject and level
-            const parseAllBackground = async () => {
-              const cache = getCache(subj, lvl);
-              while (!cache.isFinished && !cache.stopParsing) {
-                if (!cache.isParsing) {
-                  await parseMorePages(loadedPdf, subj, lvl, 10);
-                } else {
-                  await new Promise(resolve => setTimeout(resolve, 500));
-                }
+          const cachedKey = `parsed_${subj}_${lvl}`;
+          const cachedData = await getCacheData(cachedKey);
+
+          if (cachedData) {
+            const cache = getCache(subj, lvl);
+            cache.validQuestions = cachedData.validQuestions || [];
+            cache.markSchemes = cachedData.markSchemes || {};
+            cache.examCodes = cachedData.examCodes || {};
+            cache.extractedQuestions = cachedData.extractedQuestions || [];
+            cache.isFinished = true;
+            cache.isParsing = false;
+            setGlobalValidQuestions(prev => [...prev, ...cache.validQuestions]);
+          } else {
+            // Fetch pre-parsed JSON
+            try {
+              const res = await fetch(`/data/${fileName}.json`);
+              if (res.ok) {
+                const data = await res.json();
+                const cache = getCache(subj, lvl);
+                cache.validQuestions = data.validQuestions || [];
+                cache.markSchemes = data.markSchemes || {};
+                cache.examCodes = data.examCodes || {};
+                cache.extractedQuestions = data.extractedQuestions || [];
+                cache.isFinished = true;
+                cache.isParsing = false;
+                
+                await setCache(cachedKey, {
+                  validQuestions: cache.validQuestions,
+                  markSchemes: cache.markSchemes,
+                  examCodes: cache.examCodes,
+                  extractedQuestions: cache.extractedQuestions
+                });
+                setGlobalValidQuestions(prev => [...prev, ...cache.validQuestions]);
+                console.log(`Loaded ${cache.validQuestions.length} pre-parsed questions for ${subj} ${lvl}`);
               }
-            };
-            parseAllBackground();
+            } catch (err) {
+              console.error(`Failed to load pre-parsed JSON for ${subj} ${lvl}:`, err);
+            }
           }
         } catch (e) {
           console.error(`Failed to preload ${subj} for level ${lvl}:`, e);
@@ -528,293 +545,7 @@ export default function App() {
   const [followUpInput, setFollowUpInput] = useState('');
   const [isSendingFollowUp, setIsSendingFollowUp] = useState(false);
 
-  const parseMorePages = async (pdfDoc: pdfjsLib.PDFDocumentProxy, subj: Subject, lvl: Level, targetNewQuestions: number, timeoutMs?: number) => {
-    const cache = getCache(subj, lvl);
-    if (cache.isParsing || cache.isFinished) return;
-    cache.isParsing = true;
 
-    let newValidCount = 0;
-    const startTime = Date.now();
-
-    try {
-      while (cache.pageNum <= pdfDoc.numPages && newValidCount < targetNewQuestions) {
-        if (cache.stopParsing) break;
-        if (timeoutMs && Date.now() - startTime > timeoutMs && cache.validQuestions.length > 0) {
-          break;
-        }
-        
-        const batchSize = 3;
-        const pagesToFetch = [];
-        for (let i = 0; i < batchSize && cache.pageNum + i <= pdfDoc.numPages; i++) {
-          pagesToFetch.push(cache.pageNum + i);
-        }
-        
-        const pages = await Promise.all(pagesToFetch.map(p => pdfDoc.getPage(p)));
-        const textContents = await Promise.all(pages.map(p => p.getTextContent()));
-
-        for (let pageIdx = 0; pageIdx < pages.length; pageIdx++) {
-          const pageNum = pagesToFetch[pageIdx];
-          const page = pages[pageIdx];
-          const textContent = textContents[pageIdx];
-          const textStr = textContent.items.map((i: any) => i.str).join(' ');
-          const textStrLower = textStr.toLowerCase();
-
-          const isCoverPage = textStrLower.includes('multiple choice') && 
-                              (textStrLower.includes('45 minutes') || textStrLower.includes('instructions') || textStrLower.includes('forty questions')) && 
-                              !textStrLower.includes('mark scheme');
-                              
-          const isMSPage = textStrLower.includes('mark scheme');
-          
-          let standardCode: string | null = null;
-          
-          // Legacy format: 0987/11/M/J/20
-          const legacyMatch = textStr.match(/\b(\d{4})\/(\d{2})\/(M\/J|O\/N|F\/M)\/(\d{2})\b/);
-          if (legacyMatch) {
-            const subjCode = legacyMatch[1];
-            const variant = legacyMatch[2];
-            const monthStr = legacyMatch[3];
-            const yearStr = legacyMatch[4];
-            const month = monthStr === 'M/J' ? '06' : monthStr === 'O/N' ? '11' : '03';
-            const year = '20' + yearStr;
-            standardCode = `${subjCode}-${variant}-${month}-${year}`;
-          }
-
-          // New format: 06_0987_11_2024_1.1a or 11_0987_12_FP_2025
-          const newCodeMatch = textStr.match(/\b(06|11|03)_(\d{4})_(\d{2})[_ /](?:[A-Za-z]+_)?(\d{4})/);
-          if (newCodeMatch) {
-            const month = newCodeMatch[1];
-            const subjCode = newCodeMatch[2];
-            const variant = newCodeMatch[3];
-            const year = newCodeMatch[4];
-            standardCode = `${subjCode}-${variant}-${month}-${year}`;
-          }
-
-          // Mark Scheme alternative format
-          if (!standardCode) {
-            const msCodeMatch = textStr.match(/\b(\d{4})\/(\d{2})\b/);
-            const msDateMatch = textStr.match(/\b(May\/June|October\/November|February\/March)\s+(\d{4})\b/i);
-            if (msCodeMatch && msDateMatch) {
-              const subjCode = msCodeMatch[1];
-              const variant = msCodeMatch[2];
-              const monthStr = msDateMatch[1].toLowerCase();
-              const year = msDateMatch[2];
-              let month = '06';
-              if (monthStr.includes('october')) month = '11';
-              if (monthStr.includes('february')) month = '03';
-              standardCode = `${subjCode}-${variant}-${month}-${year}`;
-            }
-          }
-
-          if (isCoverPage) {
-            if (standardCode) {
-              const existingIndex = Object.entries(cache.examCodes).find(([_, c]) => c === standardCode)?.[0];
-              if (!existingIndex) {
-                cache.currentExamIndex++;
-                cache.currentQNum = 0;
-                cache.examCodes[cache.currentExamIndex] = standardCode;
-              } else {
-                cache.currentExamIndex = Number(existingIndex);
-                cache.currentQNum = 0;
-              }
-            } else {
-              if (cache.isMarkScheme || cache.currentExamIndex === 0) {
-                cache.currentExamIndex++;
-                cache.currentQNum = 0;
-              }
-            }
-            cache.isMarkScheme = false;
-          } else if (isMSPage) {
-            cache.isMarkScheme = true;
-          }
-
-          if (cache.isMarkScheme && standardCode) {
-            const matchingIndex = Object.entries(cache.examCodes).find(([_, c]) => c === standardCode)?.[0];
-            if (matchingIndex) {
-              cache.currentExamIndex = Number(matchingIndex);
-            }
-          } else if (!cache.isMarkScheme && cache.currentExamIndex > 0 && standardCode) {
-            if (!cache.examCodes[cache.currentExamIndex]) {
-              cache.examCodes[cache.currentExamIndex] = standardCode;
-            }
-          }
-
-          const viewport = page.getViewport({ scale: 2.0 });
-          const mappedItems = textContent.items.map((item: any) => {
-            const [x, y] = viewport.convertToViewportPoint(item.transform[4], item.transform[5]);
-            return { text: item.str.trim(), x, y, height: item.height };
-          });
-
-          if (cache.isMarkScheme && cache.currentExamIndex > 0) {
-            const rowMap: Record<number, any[]> = {};
-            mappedItems.forEach((item: any) => {
-              if (item.text.length === 0) return;
-              const y = Math.round(item.y / 10) * 10;
-              if (!rowMap[y]) rowMap[y] = [];
-              rowMap[y].push(item);
-            });
-
-            const sortedY = Object.keys(rowMap).map(Number).sort((a, b) => a - b);
-            for (const y of sortedY) {
-              const rowItems = rowMap[y].sort((a, b) => a.x - b.x);
-              const rowText = rowItems.map(i => i.text);
-              
-              for (let i = 0; i < rowText.length - 1; i++) {
-                const qNum = parseInt(rowText[i]);
-                const ans = rowText[i+1];
-                if (!isNaN(qNum) && qNum >= 1 && qNum <= 40 && qNum.toString() === rowText[i] && ['A', 'B', 'C', 'D'].includes(ans)) {
-                  if (!cache.markSchemes[cache.currentExamIndex]) {
-                    cache.markSchemes[cache.currentExamIndex] = {};
-                  }
-                  cache.markSchemes[cache.currentExamIndex][qNum] = ans;
-                }
-              }
-            }
-
-            const regex = /\b(\d{1,2})\s+([A-D])\b/g;
-            let match;
-            while ((match = regex.exec(textStr)) !== null) {
-              const qNum = parseInt(match[1]);
-              const ans = match[2];
-              if (qNum >= 1 && qNum <= 40) {
-                if (!cache.markSchemes[cache.currentExamIndex]) {
-                  cache.markSchemes[cache.currentExamIndex] = {};
-                }
-                if (!cache.markSchemes[cache.currentExamIndex][qNum]) {
-                  cache.markSchemes[cache.currentExamIndex][qNum] = ans;
-                }
-              }
-            }
-          } else if (!cache.isMarkScheme && !isCoverPage && cache.currentExamIndex > 0) {
-            const validTextItems = mappedItems.filter(i => i.text.length > 0);
-            if (validTextItems.length > 0) {
-              const possibleQItems = validTextItems.filter(i => {
-                const num = parseInt(i.text);
-                return num >= 1 && num <= 40 && i.text === num.toString();
-              });
-
-              if (possibleQItems.length > 0) {
-                const leftAlignedItems = possibleQItems.filter(i => i.x < 150);
-                if (leftAlignedItems.length > 0) {
-                  const minX = Math.min(...leftAlignedItems.map(i => i.x));
-                  const qItems = leftAlignedItems.filter(i => i.x <= minX + 20);
-
-                  qItems.sort((a, b) => a.y - b.y);
-
-                  const uniqueQItems = [];
-                  for (const item of qItems) {
-                    if (uniqueQItems.length === 0 || item.y - uniqueQItems[uniqueQItems.length - 1].y > 20) {
-                      uniqueQItems.push(item);
-                    }
-                  }
-
-                  const pageQItems = [];
-                  for (const item of uniqueQItems) {
-                    const num = parseInt(item.text);
-                    if (num > cache.currentQNum && num <= cache.currentQNum + 3) {
-                      pageQItems.push(item);
-                      cache.currentQNum = num;
-                    }
-                  }
-
-                  for (let i = 0; i < pageQItems.length; i++) {
-                    const qItem = pageQItems[i];
-                    const qNumber = parseInt(qItem.text);
-                    const startY = Math.max(0, qItem.y - 20);
-                    
-                    let endY;
-                    if (i < pageQItems.length - 1) {
-                      endY = pageQItems[i+1].y - 20;
-                    } else {
-                      const footerItems = validTextItems.filter(item => 
-                        item.y > qItem.y && 
-                        (item.text.includes('UCLES') || 
-                         item.text.includes('Cambridge') || 
-                         item.text.toLowerCase().includes('turn over') ||
-                         item.text.includes('BLANK PAGE') ||
-                         item.text.match(/\b\d{4}\/\d{2}\/(M\/J|O\/N|F\/M)\/\d{2}\b/) ||
-                         item.text.match(/\b(06|11|03)_\d{4}_\d{2}[_ /](?:[A-Za-z]+_)?(\d{4})/))
-                      );
-                      if (footerItems.length > 0) {
-                        const minFooterY = Math.min(...footerItems.map(item => item.y));
-                        endY = minFooterY - 20;
-                      } else {
-                        endY = viewport.height;
-                      }
-                    }
-                    
-                    const questionTextItems = validTextItems.filter(item => item.y >= startY && item.y <= endY);
-                    const questionText = questionTextItems.map(item => item.text).join(' ');
-                    
-                    if (subj && !isQuestionValid(subj, questionText)) {
-                      continue; // Skip this question as it's removed from syllabus
-                    }
-                    
-                    cache.extractedQuestions.push({
-                      examIndex: cache.currentExamIndex,
-                      qNumber,
-                      pageIndex: pageNum,
-                      startY,
-                      endY,
-                      examCode: cache.examCodes[cache.currentExamIndex]
-                    });
-                  }
-                }
-              }
-            }
-          }
-
-          const newlyValid: Question[] = [];
-          const remainingExtracted: Question[] = [];
-          for (const q of cache.extractedQuestions) {
-            const ans = cache.markSchemes[q.examIndex]?.[q.qNumber];
-            if (ans) {
-              q.answer = ans;
-              q.examCode = cache.examCodes[q.examIndex] || q.examCode;
-              newlyValid.push(q);
-            } else {
-              remainingExtracted.push(q);
-            }
-          }
-          
-          cache.extractedQuestions = remainingExtracted;
-          
-          if (newlyValid.length > 0) {
-            cache.validQuestions.push(...newlyValid);
-            newValidCount += newlyValid.length;
-            
-            if (subject === subj) {
-              setQuestions([...cache.validQuestions]);
-            }
-          }
-
-          if (subject === subj) {
-            const exams = Object.entries(cache.examCodes).map(([index, code]) => ({ index: Number(index), code: code as string }));
-            setAvailableExams(exams);
-          }
-
-          cache.pageNum++;
-        }
-        
-        // Yield to the main thread to prevent UI freezing
-        await new Promise(resolve => setTimeout(resolve, 10));
-      }
-
-      if (cache.pageNum > pdfDoc.numPages) {
-        cache.isFinished = true;
-        if (subject === subj) {
-          setIsParsingFinished(true);
-        }
-      }
-    } catch (error) {
-      console.error(`Error parsing PDF pages for ${subj}:`, error);
-      cache.isFinished = true;
-      if (subject === subj) {
-        setIsParsingFinished(true);
-      }
-    } finally {
-      cache.isParsing = false;
-    }
-  };
 
   const loadSubjectPdf = async (subj: Subject, restoreState?: { stats: {total: number, correct: number}, askedQuestionIds: string[] }, vaultQuestion?: any) => {
     setSubject(subj);
@@ -871,16 +602,14 @@ export default function App() {
           throw new Error(`File /${fileName}.pdf is not a valid PDF file. Please ensure you uploaded a valid PDF document.`);
         }
 
-        loadedPdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+        const pdfjsLibInstance = await getPdfJs();
+        loadedPdf = await pdfjsLibInstance.getDocument({ data: arrayBuffer }).promise;
+        preloadedPdfsRef.current[fileName] = loadedPdf;
       }
       setPdf(loadedPdf);
 
       if (quizMode === 'whole_paper') {
         setScreen('select_exam');
-        // Parse the rest of the PDF in the background to find all exams
-        setTimeout(() => {
-          parseMorePages(loadedPdf, subj, level, 1000); // Parse a lot to find all exams
-        }, 100);
       } else if (vaultQuestion) {
         setScreen('quiz');
         setCurrentQuestion(vaultQuestion);
@@ -897,8 +626,6 @@ export default function App() {
           setQuestionImage(null);
         }
       } else {
-        await parseMorePages(loadedPdf, subj, level, 5, 5000);
-        
         if (cache.validQuestions.length > 0) {
           if (restoreState) {
             setStats(restoreState.stats);
@@ -912,11 +639,6 @@ export default function App() {
             setScreen('quiz');
             pickRandomQuestion(loadedPdf, new Set(), subj);
           }
-          
-          // Start background parsing for the next chunk after the UI has updated
-          setTimeout(() => {
-            parseMorePages(loadedPdf, subj, level, 30);
-          }, 100);
         } else {
           setErrorMessage(`Could not find any valid questions with answers in ${fileName}.pdf.`);
           setScreen('home');
@@ -954,28 +676,10 @@ export default function App() {
     setHintTimer(0);
     
     let availableQs = cache.validQuestions.filter(q => !currentAskedIds.has(`${q.examIndex}-${q.qNumber}`));
-    
-    if (availableQs.length < 10 && !cache.isFinished && !cache.isParsing) {
-      setTimeout(() => {
-        parseMorePages(loadedPdf, activeSubject, level, 30);
-      }, 100);
-    }
 
     if (availableQs.length === 0) {
-      if (!cache.isFinished) {
-        setQuestionImage('loading');
-        while (availableQs.length === 0 && !cache.isFinished) {
-          await parseMorePages(loadedPdf, activeSubject, level, 20);
-          availableQs = cache.validQuestions.filter(q => !currentAskedIds.has(`${q.examIndex}-${q.qNumber}`));
-        }
-        if (availableQs.length === 0) {
-          setScreen('results');
-          return;
-        }
-      } else {
-        setScreen('results');
-        return;
-      }
+      setScreen('results');
+      return;
     }
 
     const randomQ = availableQs[Math.floor(Math.random() * availableQs.length)];
@@ -1337,11 +1041,6 @@ export default function App() {
     }
 
     if (pdf && subject) {
-      const cache = getCache(subject, level);
-      const availableCount = cache.validQuestions.length - askedQuestionIds.size;
-      if (availableCount < 20 && !cache.isFinished) {
-        parseMorePages(pdf, subject, level, 30);
-      }
       pickRandomQuestion(pdf, askedQuestionIds);
     }
   };

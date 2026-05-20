@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { ThemeIcon } from './ThemeIcon';
 import { GoogleGenAI } from '@google/genai';
-import * as pdfjsLib from 'pdfjs-dist';
+import type * as pdfjsLib from 'pdfjs-dist';
 import { motion } from 'motion/react';
 import { Question } from '../types';
 import { renderQuestionImage } from '../utils/pdfParser';

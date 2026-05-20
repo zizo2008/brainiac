@@ -1,4 +1,4 @@
-import * as pdfjsLib from 'pdfjs-dist';
+import type * as pdfjsLib from 'pdfjs-dist';
 import { Question } from '../types';
 
 export interface ParserState {
