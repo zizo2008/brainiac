@@ -128,11 +128,10 @@ export default function MultiplayerGame({ game, userProfile, onExit, activeTheme
       try {
         const pdfUrl = getPdfUrl(fileName);
         
-        const response = await fetch(pdfUrl);
-        if (!response.ok) throw new Error(`Failed to fetch ${fileName}.pdf`);
-        const arrayBuffer = await response.arrayBuffer();
+        const headRes = await fetch(pdfUrl, { method: 'HEAD' });
+        if (!headRes.ok) throw new Error(`Failed to fetch ${fileName}.pdf`);
         const pdfjsLibInstance = await getPdfJs();
-        pdf = await pdfjsLibInstance.getDocument({ data: arrayBuffer }).promise;
+        pdf = await pdfjsLibInstance.getDocument({ url: pdfUrl }).promise;
       } catch (err) {
         throw new Error(`Error loading PDF: Failed to fetch ${fileName}.pdf from storage. Please check your connection.`);
       }

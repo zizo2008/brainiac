@@ -574,36 +574,22 @@ export default function App() {
     
     try {
       if (!loadedPdf) {
-        let response;
+        const pdfUrl = `/${fileName}.pdf`;
         try {
-          response = await fetch(`/${fileName}.pdf`);
+          const headRes = await fetch(pdfUrl, { method: 'HEAD' });
+          if (!headRes.ok) {
+            throw new Error(`Failed to fetch /${fileName}.pdf (Status: ${headRes.status})`);
+          }
+          const contentType = headRes.headers.get('content-type');
+          if (contentType && contentType.includes('text/html')) {
+            throw new Error(`File /${fileName}.pdf not found. Please upload it to the public folder.`);
+          }
         } catch (err) {
           throw new Error(`Network error: Failed to fetch /${fileName}.pdf. Please check your connection or disable adblockers.`);
         }
-        
-        if (!response.ok) {
-          throw new Error(`Failed to fetch /${fileName}.pdf (Status: ${response.status})`);
-        }
-        
-        const contentType = response.headers.get('content-type');
-        if (contentType && contentType.includes('text/html')) {
-          throw new Error(`File /${fileName}.pdf not found. Please upload it to the public folder.`);
-        }
-
-        const arrayBuffer = await response.arrayBuffer();
-        
-        const uint8Array = new Uint8Array(arrayBuffer);
-        if (uint8Array.length < 5 || 
-            uint8Array[0] !== 0x25 || // %
-            uint8Array[1] !== 0x50 || // P
-            uint8Array[2] !== 0x44 || // D
-            uint8Array[3] !== 0x46 || // F
-            uint8Array[4] !== 0x2D) { // -
-          throw new Error(`File /${fileName}.pdf is not a valid PDF file. Please ensure you uploaded a valid PDF document.`);
-        }
 
         const pdfjsLibInstance = await getPdfJs();
-        loadedPdf = await pdfjsLibInstance.getDocument({ data: arrayBuffer }).promise;
+        loadedPdf = await pdfjsLibInstance.getDocument({ url: pdfUrl }).promise;
         preloadedPdfsRef.current[fileName] = loadedPdf;
       }
       setPdf(loadedPdf);
@@ -626,6 +612,25 @@ export default function App() {
           setQuestionImage(null);
         }
       } else {
+        if (cache.validQuestions.length === 0) {
+          try {
+            const res = await fetch(`/data/${fileName}.json`);
+            if (res.ok) {
+              const data = await res.json();
+              cache.validQuestions = data.validQuestions || [];
+              cache.markSchemes = data.markSchemes || {};
+              cache.examCodes = data.examCodes || {};
+              cache.extractedQuestions = data.extractedQuestions || [];
+              cache.isFinished = true;
+              cache.isParsing = false;
+              setGlobalValidQuestions(prev => [...prev, ...cache.validQuestions]);
+              console.log(`Priority loaded ${cache.validQuestions.length} pre-parsed questions for ${subj} ${level}`);
+            }
+          } catch (err) {
+            console.error("Failed to load pre-parsed JSON on demand", err);
+          }
+        }
+        
         if (cache.validQuestions.length > 0) {
           if (restoreState) {
             setStats(restoreState.stats);
