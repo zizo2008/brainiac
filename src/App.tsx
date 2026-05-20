@@ -1467,7 +1467,35 @@ export default function App() {
           </motion.div>
         )}
 
-        {screen === 'quiz' && pdf && currentQuestion && (
+        {screen === 'quiz' && (!currentQuestion || questionImage === 'loading') && (
+          <div className="max-w-4xl mx-auto p-2 sm:p-4 space-y-3 sm:space-y-4 flex-1 flex flex-col min-h-0 w-full overflow-hidden animate-pulse">
+            {/* Header Skeleton */}
+            <div className={`flex flex-row justify-between items-center gap-2 mb-1 p-2 rounded-xl shadow-sm shrink-0 ${themes[activeTheme].card}`}>
+              <div className={`w-24 h-6 rounded-md ${themes[activeTheme].tabInactive} ${themes[activeTheme].border} border opacity-50`}></div>
+              <div className="flex items-center gap-2">
+                <div className={`w-24 h-6 rounded-full ${themes[activeTheme].tabInactive} ${themes[activeTheme].border} border opacity-50`}></div>
+                <div className={`w-20 h-6 rounded-full ${themes[activeTheme].tabInactive} ${themes[activeTheme].border} border opacity-50`}></div>
+              </div>
+            </div>
+
+            {/* Question Image Skeleton */}
+            <div className={`${themes[activeTheme].card} rounded-2xl shadow-sm overflow-hidden min-h-[300px] flex items-center justify-center relative`}>
+              <div className="absolute inset-0 flex items-center justify-center z-10">
+                <div className={`animate-spin rounded-full h-12 w-12 border-b-4 ${themes[activeTheme].border} border-t-transparent`}></div>
+              </div>
+              <div className={`w-11/12 h-48 md:h-64 ${themes[activeTheme].tabInactive} ${themes[activeTheme].border} border rounded-xl opacity-50`}></div>
+            </div>
+
+            {/* Answers Skeleton */}
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-2 sm:gap-3">
+              {[1, 2, 3, 4].map(i => (
+                <div key={i} className={`h-14 sm:h-16 ${themes[activeTheme].tabInactive} ${themes[activeTheme].border} border rounded-xl opacity-50`}></div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {screen === 'quiz' && pdf && currentQuestion && questionImage !== 'loading' && (
           <div className="max-w-4xl mx-auto p-2 sm:p-4 space-y-3 sm:space-y-4 flex-1 flex flex-col min-h-0 w-full overflow-hidden">
             <div className={`flex flex-row justify-between items-center gap-2 mb-1 p-2 rounded-xl shadow-sm shrink-0 ${themes[activeTheme].card}`}>
               <div className="flex items-center gap-2">
