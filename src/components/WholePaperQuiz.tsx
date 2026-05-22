@@ -52,7 +52,8 @@ export default function WholePaperQuiz({ questions, subject, examCode, isParsing
     const extractCurrentImage = async () => {
       if (!currentQuestion || imageMap[currentQuestion.qNumber]) return;
       setImageLoaded(false);
-      const imgUrl = `/extracted_images/${subject === 'economics' ? (level === 'a_level' ? 'econal' : 'econ') : subject === 'accounting' ? (level === 'a_level' ? 'accal' : 'accol') : subject === 'chemistry' ? (level === 'a_level' ? 'chemal' : level === 'core' ? 'chemcr' : 'chem') : level === 'core' ? subject.slice(0,3) + 'cr' : level === 'a_level' ? subject.slice(0,3) + 'al' : subject.slice(0,3)}/${currentQuestion.examIndex}_${currentQuestion.qNumber}.png`;
+      const safeSubj = subject.toLowerCase();
+      const imgUrl = `/extracted_images/${safeSubj === 'economics' ? (level === 'a_level' ? 'econal' : 'econ') : safeSubj === 'accounting' ? (level === 'a_level' ? 'accal' : 'accol') : safeSubj === 'chemistry' ? (level === 'a_level' ? 'chemal' : level === 'core' ? 'chemcr' : 'chem') : level === 'core' ? safeSubj.slice(0,3) + 'cr' : level === 'a_level' ? safeSubj.slice(0,3) + 'al' : safeSubj.slice(0,3)}/${currentQuestion.examIndex}_${currentQuestion.qNumber}.png`;
       
       if (isMounted) {
         setImageMap(prev => ({ ...prev, [currentQuestion.qNumber]: imgUrl }));
