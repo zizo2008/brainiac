@@ -134,7 +134,7 @@ service cloud.firestore {
     }
 
     function isValidGame(data) {
-      return hasOnlyAllowedFields(['id', 'code', 'hostId', 'maxPlayers', 'players', 'playerIds', 'status', 'subject', 'mode', 'targetQuestions', 'targetTimeSeconds', 'sameQuestions', 'questions', 'startTime', 'winnerId', 'targetExamCode']) &&
+      return hasOnlyAllowedFields(['id', 'code', 'hostId', 'maxPlayers', 'players', 'playerIds', 'status', 'subject', 'level', 'mode', 'targetQuestions', 'targetTimeSeconds', 'sameQuestions', 'questions', 'startTime', 'winnerId', 'targetExamCode']) &&
              data.id is string && data.id.size() > 0 && data.id.size() < 100 &&
              data.code is string && data.code.size() > 0 && data.code.size() < 20 &&
              data.hostId is string && data.hostId.size() > 0 && data.hostId.size() < 100 &&
@@ -143,6 +143,7 @@ service cloud.firestore {
              (!('playerIds' in data) || data.playerIds is list) &&
              data.status in ['waiting', 'playing', 'finished'] &&
              data.subject is string && data.subject.size() > 0 && data.subject.size() < 50 &&
+             (!('level' in data) || data.level == null || data.level in ['core', 'extended', 'a_level']) &&
              data.mode in ['questions', 'time', 'both', 'whole_paper'] &&
              (!('targetQuestions' in data) || data.targetQuestions == null || (data.targetQuestions is number && data.targetQuestions >= 0)) &&
              (!('targetTimeSeconds' in data) || data.targetTimeSeconds == null || (data.targetTimeSeconds is number && data.targetTimeSeconds >= 0)) &&
