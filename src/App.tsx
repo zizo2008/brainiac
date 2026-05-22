@@ -621,32 +621,56 @@ export default function App() {
     setTimeout(preloadPdfs, 1000);
   }, [level, userProfile?.prioritizedSubjects]); // Re-run when level or prioritized subjects change
 
-  // Pre-process images for the prioritized subject immediately on page load
+  // Pre-process images for all subjects when question data is ready
   useEffect(() => {
     const timer = setTimeout(() => {
-      // Pick the first prioritized subject or default to chemistry
-      let startSubj: Subject = 'chemistry';
-      let startLvl: Level = level;
+      const allSubjects: Subject[] = ['chemistry', 'physics', 'biology', 'economics', 'accounting'];
+
+      // Build an ordered list: prioritized subjects first (4 images each), then the rest (2 images each)
+      const prioritized: { subj: Subject; lvl: Level; count: number }[] = [];
+      const rest: { subj: Subject; lvl: Level; count: number }[] = [];
+
+      const prioritizedSubjectNames = new Set<string>();
+
       if (userProfile?.prioritizedSubjects && userProfile.prioritizedSubjects.length > 0) {
-        const p = userProfile.prioritizedSubjects[0];
-        startSubj = p.subject as Subject;
-        const lvls = p.levels && p.levels.length > 0 ? p.levels : [(p as any).level || 'extended'];
-        startLvl = lvls[0] as Level;
+        userProfile.prioritizedSubjects.forEach(p => {
+          const subj = p.subject as Subject;
+          const lvls = p.levels && p.levels.length > 0 ? p.levels : [(p as any).level || 'extended'];
+          lvls.forEach((lvl: Level) => {
+            prioritized.push({ subj, lvl, count: 4 });
+          });
+          prioritizedSubjectNames.add(subj);
+        });
       }
-      const cache = getCache(startSubj, startLvl);
-      if (cache.validQuestions.length > 0) {
-        // Pick 4 random questions and pre-process their images
-        const pool = [...cache.validQuestions];
-        const picks: Question[] = [];
-        for (let i = 0; i < 4 && pool.length > 0; i++) {
-          const idx = Math.floor(Math.random() * pool.length);
-          picks.push(pool.splice(idx, 1)[0]);
+
+      // All other subjects at the current level get 2 warm-up images
+      allSubjects.forEach(subj => {
+        if (!prioritizedSubjectNames.has(subj)) {
+          rest.push({ subj, lvl: level, count: 2 });
         }
-        picks.forEach(q => processAndCacheImage(getImageUrl(startSubj, startLvl, q.examIndex, q.qNumber)));
-      }
+      });
+
+      // Process in order: priority subjects first, then the rest
+      // Stagger them slightly so we don't hammer the browser all at once
+      let delay = 0;
+      [...prioritized, ...rest].forEach(({ subj, lvl, count }) => {
+        setTimeout(() => {
+          const cache = getCache(subj, lvl);
+          if (cache.validQuestions.length === 0) return;
+          const pool = [...cache.validQuestions];
+          const picks: Question[] = [];
+          for (let i = 0; i < count && pool.length > 0; i++) {
+            const idx = Math.floor(Math.random() * pool.length);
+            picks.push(pool.splice(idx, 1)[0]);
+          }
+          picks.forEach(q => processAndCacheImage(getImageUrl(subj, lvl, q.examIndex, q.qNumber)));
+        }, delay);
+        delay += 300; // 300ms between each subject so we don't block the UI
+      });
     }, 2500); // Wait for question data to be loaded first
     return () => clearTimeout(timer);
   }, [userProfile?.prioritizedSubjects, level]);
+
   const [questions, setQuestions] = useState<Question[]>([]);
   const [currentQuestion, setCurrentQuestion] = useState<Question | null>(null);
   const [upcomingQuestions, setUpcomingQuestions] = useState<Question[]>([]);
