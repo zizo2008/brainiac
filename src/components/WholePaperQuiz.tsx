@@ -1,17 +1,13 @@
 import React, { useState, useEffect } from 'react';
 import { ThemeIcon } from './ThemeIcon';
 import { GoogleGenAI } from '@google/genai';
-import type * as pdfjsLib from 'pdfjs-dist';
+import { ThemeName, themes } from '../theme';
 import { motion } from 'motion/react';
 import { Question } from '../types';
-import { renderQuestionImage } from '../utils/pdfParser';
 import BookmarkModal from './BookmarkModal';
 import { isGlobalPremium, hasPremiumForLevel } from '../utils/premium';
 
-import { ThemeName, themes } from '../theme';
-
 interface WholePaperQuizProps {
-  pdf: pdfjsLib.PDFDocumentProxy;
   questions: Question[];
   subject: string;
   examCode: string;
@@ -26,7 +22,7 @@ interface WholePaperQuizProps {
   level?: string;
 }
 
-export default function WholePaperQuiz({ pdf, questions, subject, examCode, isParsingFinished, onEnd, onAnswer, opponentScore, opponentProgress, userProfile, activeTheme, instantFeedback, level }: WholePaperQuizProps) {
+export default function WholePaperQuiz({ questions, subject, examCode, isParsingFinished, onEnd, onAnswer, opponentScore, opponentProgress, userProfile, activeTheme, instantFeedback, level }: WholePaperQuizProps) {
   const [currentIndex, setCurrentIndex] = useState(0);
   const [answers, setAnswers] = useState<Record<number, string>>({});
   const [flags, setFlags] = useState<Set<number>>(new Set());
@@ -34,6 +30,7 @@ export default function WholePaperQuiz({ pdf, questions, subject, examCode, isPa
   const [showConfirmSubmit, setShowConfirmSubmit] = useState(false);
   const [showBookmarkModal, setShowBookmarkModal] = useState(false);
   const [imageMap, setImageMap] = useState<Record<number, string>>({});
+  const [imageLoaded, setImageLoaded] = useState(false);
   
   const [explanation, setExplanation] = useState<string | null>(null);
   const [isExplaining, setIsExplaining] = useState(false);
@@ -45,6 +42,7 @@ export default function WholePaperQuiz({ pdf, questions, subject, examCode, isPa
   useEffect(() => {
     setExplanation(null);
     setIsExplaining(false);
+    setImageLoaded(false);
   }, [currentQuestion]);
 
   useEffect(() => {
@@ -53,22 +51,14 @@ export default function WholePaperQuiz({ pdf, questions, subject, examCode, isPa
     const extractCurrentImage = async () => {
       if (!currentQuestion || imageMap[currentQuestion.qNumber]) return;
       
-      try {
-        const imgUrl = await renderQuestionImage(pdf, currentQuestion);
-        if (isMounted && imgUrl) {
-          setImageMap(prev => ({ ...prev, [currentQuestion.qNumber]: imgUrl }));
-        }
-      } catch (error) {
-        console.error('Error extracting question image:', error);
+      const imgUrl = `/extracted_images/${subject === 'economics' ? (level === 'a_level' ? 'econal' : 'econ') : subject === 'accounting' ? (level === 'a_level' ? 'accal' : 'accol') : level === 'core' ? subject.slice(0,3) + 'cr' : level === 'a_level' ? subject.slice(0,3) + 'al' : subject.slice(0,3)}/${currentQuestion.examIndex}_${currentQuestion.qNumber}.png`;
+      if (isMounted) {
+        setImageMap(prev => ({ ...prev, [currentQuestion.qNumber]: imgUrl }));
       }
     };
-    
     extractCurrentImage();
-    
-    return () => {
-      isMounted = false;
-    };
-  }, [pdf, currentQuestion]);
+    return () => { isMounted = false; };
+  }, [currentQuestion, imageMap, subject, level]);
 
   const handleAnswer = (option: string) => {
     if (!currentQuestion || isSubmitted) return;
@@ -351,11 +341,20 @@ export default function WholePaperQuiz({ pdf, questions, subject, examCode, isPa
             </div>
             <div className="p-2 sm:p-4 overflow-x-auto min-h-[150px] flex items-center justify-center bg-transparent custom-scrollbar">
               {imageMap[currentQuestion.qNumber] ? (
-                <img 
-                  src={imageMap[currentQuestion.qNumber]} 
-                  alt={`Question ${currentQuestion.qNumber}`}
-                  className="w-full h-auto max-h-[35vh] object-contain mix-blend-multiply dark:mix-blend-screen dark:invert"
-                />
+                <div className="relative w-full flex items-center justify-center min-h-[150px]">
+                  {!imageLoaded && (
+                    <div className="absolute inset-0 flex items-center justify-center z-10">
+                      <div className={`animate-spin rounded-full h-8 w-8 sm:h-10 sm:w-10 border-b-2 ${themes[activeTheme].accent}`}></div>
+                    </div>
+                  )}
+                  <img 
+                    src={imageMap[currentQuestion.qNumber]} 
+                    alt={`Question ${currentQuestion.qNumber}`}
+                    onLoad={() => setImageLoaded(true)}
+                    onError={() => setImageLoaded(true)}
+                    className={`w-full h-auto max-h-[35vh] object-contain mix-blend-multiply dark:mix-blend-screen dark:invert transition-opacity duration-300 ${!imageLoaded ? 'opacity-0' : 'opacity-100'}`}
+                  />
+                </div>
               ) : (
                 <div className={`flex flex-col items-center ${themes[activeTheme].textSecondary}`}>
                   <div className={`animate-spin rounded-full h-10 w-10 border-b-2 ${themes[activeTheme].accent} mb-4`}></div>

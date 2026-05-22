@@ -394,7 +394,7 @@ export default function App() {
   const [availableExams, setAvailableExams] = useState<{index: number, code: string}[]>([]);
   const [isParsingFinished, setIsParsingFinished] = useState(false);
   
-  const [pdf, setPdf] = useState<pdfjsLib.PDFDocumentProxy | null>(null);
+  
   const preloadedPdfsRef = useRef<Record<string, pdfjsLib.PDFDocumentProxy>>({});
   const preRenderedQuestionsRef = useRef<Record<string, {question: any, image: string}>>({});
 
@@ -475,7 +475,7 @@ export default function App() {
             cache.extractedQuestions = cachedData.extractedQuestions || [];
             cache.isFinished = true;
             cache.isParsing = false;
-            setGlobalValidQuestions(prev => [...prev, ...cache.validQuestions]);
+            
           } else {
             // Fetch pre-parsed JSON
             try {
@@ -496,29 +496,14 @@ export default function App() {
                   examCodes: cache.examCodes,
                   extractedQuestions: cache.extractedQuestions
                 });
-                setGlobalValidQuestions(prev => [...prev, ...cache.validQuestions]);
+                
                 console.log(`Loaded ${cache.validQuestions.length} pre-parsed questions for ${subj} ${lvl}`);
               }
             } catch (err) {
               console.error(`Failed to load pre-parsed JSON for ${subj} ${lvl}:`, err);
             }
           }
-          
-          const cache = getCache(subj, lvl);
-          if (cache.validQuestions.length > 0 && !preloadedPdfsRef.current[fileName]) {
-            const pdfUrl = `/${fileName}.pdf`;
-            const pdfjsLibInstance = await getPdfJs();
-            const preloadedPdf = await pdfjsLibInstance.getDocument({ url: pdfUrl }).promise;
-            preloadedPdfsRef.current[fileName] = preloadedPdf;
-            
-            const randomQ = cache.validQuestions[Math.floor(Math.random() * cache.validQuestions.length)];
-            try {
-              const img = await renderQuestionImage(preloadedPdf, randomQ);
-              preRenderedQuestionsRef.current[cacheKey] = { question: randomQ, image: img };
-            } catch (e) {
-              // Ignore pre-render errors
-            }
-          }
+          // (PDF loading and rendering logic has been moved to build-time script)
         } catch (e) {
           console.error(`Failed to preload ${subj} for level ${lvl}:`, e);
         }
@@ -532,6 +517,7 @@ export default function App() {
   const [questions, setQuestions] = useState<Question[]>([]);
   const [currentQuestion, setCurrentQuestion] = useState<Question | null>(null);
   const [questionImage, setQuestionImage] = useState<string | null>(null);
+  const [imageLoaded, setImageLoaded] = useState(false);
   const [loading, setLoading] = useState(false);
   
   const [selectedAnswer, setSelectedAnswer] = useState<string | null>(null);
@@ -571,6 +557,7 @@ export default function App() {
     if (!restoreState && !vaultQuestion && quizMode !== 'whole_paper') {
       setScreen('quiz');
       setQuestionImage('loading');
+      setImageLoaded(false);
       setCurrentQuestion(null);
       setEliminatedOptions([]);
       setShowHintTip(false);
@@ -597,31 +584,7 @@ export default function App() {
     }
 
     const fileName = getFileName(subj, level);
-
-    let loadedPdf = preloadedPdfsRef.current[fileName];
-    
     try {
-      if (!loadedPdf) {
-        const pdfUrl = `/${fileName}.pdf`;
-        try {
-          const headRes = await fetch(pdfUrl, { method: 'HEAD' });
-          if (!headRes.ok) {
-            throw new Error(`Failed to fetch /${fileName}.pdf (Status: ${headRes.status})`);
-          }
-          const contentType = headRes.headers.get('content-type');
-          if (contentType && contentType.includes('text/html')) {
-            throw new Error(`File /${fileName}.pdf not found. Please upload it to the public folder.`);
-          }
-        } catch (err) {
-          throw new Error(`Network error: Failed to fetch /${fileName}.pdf. Please check your connection or disable adblockers.`);
-        }
-
-        const pdfjsLibInstance = await getPdfJs();
-        loadedPdf = await pdfjsLibInstance.getDocument({ url: pdfUrl }).promise;
-        preloadedPdfsRef.current[fileName] = loadedPdf;
-      }
-      setPdf(loadedPdf);
-
       if (quizMode === 'whole_paper') {
         setScreen('select_exam');
       } else if (vaultQuestion) {
@@ -632,13 +595,10 @@ export default function App() {
         setShowHintTip(false);
         setHintTipText('');
         setHintTimer(0);
-        try {
-          const img = await renderQuestionImage(loadedPdf, vaultQuestion);
-          setQuestionImage(img);
-        } catch (err) {
-          console.error('Error rendering vault question image:', err);
-          setQuestionImage(null);
-        }
+        const subj = vaultQuestion.subject || '';
+        const vlevel = vaultQuestion.level || 'o_level';
+        const prefix = subj === 'economics' ? (vlevel === 'a_level' ? 'econal' : 'econ') : subj === 'accounting' ? (vlevel === 'a_level' ? 'accal' : 'accol') : vlevel === 'core' ? subj.slice(0,3) + 'cr' : vlevel === 'a_level' ? subj.slice(0,3) + 'al' : subj.slice(0,3);
+        setQuestionImage(`/extracted_images/${prefix}/${vaultQuestion.examIndex}_${vaultQuestion.qNumber}.png`);
       } else {
         if (cache.validQuestions.length === 0) {
           try {
@@ -651,7 +611,7 @@ export default function App() {
               cache.extractedQuestions = data.extractedQuestions || [];
               cache.isFinished = true;
               cache.isParsing = false;
-              setGlobalValidQuestions(prev => [...prev, ...cache.validQuestions]);
+              
               console.log(`Priority loaded ${cache.validQuestions.length} pre-parsed questions for ${subj} ${level}`);
             }
           } catch (err) {
@@ -665,22 +625,11 @@ export default function App() {
             const restoredSet = new Set(restoreState.askedQuestionIds);
             setAskedQuestionIds(restoredSet);
             setScreen('quiz');
-            pickRandomQuestion(loadedPdf, restoredSet, subj);
+            pickRandomQuestion(restoredSet, subj);
           } else {
             setStats({ total: 0, correct: 0 });
-            // Screen is already set to 'quiz' at the start
-            const cacheKey = getCacheKey(subj, level);
-            if (preRenderedQuestionsRef.current[cacheKey]) {
-              const preRendered = preRenderedQuestionsRef.current[cacheKey];
-              setCurrentQuestion(preRendered.question);
-              setQuestionImage(preRendered.image);
-              setAskedQuestionIds(new Set([`${preRendered.question.examIndex}-${preRendered.question.qNumber}`]));
-              console.log("Used INSTANT pre-rendered question");
-              delete preRenderedQuestionsRef.current[cacheKey];
-            } else {
-              setAskedQuestionIds(new Set());
-              pickRandomQuestion(loadedPdf, new Set(), subj);
-            }
+            setAskedQuestionIds(new Set());
+            pickRandomQuestion(new Set(), subj);
           }
         } else {
           setErrorMessage(`Could not find any valid questions with answers in ${fileName}.pdf.`);
@@ -696,7 +645,7 @@ export default function App() {
     }
   };
 
-  const pickRandomQuestion = async (loadedPdf: pdfjsLib.PDFDocumentProxy, currentAskedIds: Set<string>, subj?: Subject) => {
+  const pickRandomQuestion = async (currentAskedIds: Set<string>, subj?: Subject) => {
     const activeSubject = subj || subject;
     if (!activeSubject) return;
     const cache = getCache(activeSubject, level);
@@ -706,6 +655,7 @@ export default function App() {
     }
 
     setQuestionImage(null);
+    setImageLoaded(false);
     setSelectedAnswer(null);
     setIsCorrect(null);
     setExplanation(null);
@@ -732,139 +682,10 @@ export default function App() {
     newAskedIds.add(`${randomQ.examIndex}-${randomQ.qNumber}`);
     setAskedQuestionIds(newAskedIds);
 
-    try {
-      const page = await loadedPdf.getPage(randomQ.pageIndex);
-      const viewport = page.getViewport({ scale: 2.0 });
-      
-      const canvas = document.createElement('canvas');
-      const context = canvas.getContext('2d');
-      if (!context) return;
-      
-      canvas.width = viewport.width;
-      canvas.height = viewport.height;
-      
-      await page.render({ canvasContext: context, viewport }).promise;
-      
-      const cropY = randomQ.startY;
-      const cropHeight = randomQ.endY - randomQ.startY;
-      
-      const croppedCanvas = document.createElement('canvas');
-      const croppedCtx = croppedCanvas.getContext('2d');
-      if (!croppedCtx) return;
-      
-      croppedCanvas.width = viewport.width;
-      croppedCanvas.height = cropHeight;
-      
-      croppedCtx.fillStyle = '#ffffff';
-      croppedCtx.fillRect(0, 0, viewport.width, cropHeight);
-      
-      croppedCtx.drawImage(
-        canvas,
-        0, cropY, viewport.width, cropHeight,
-        0, 0, viewport.width, cropHeight
-      );
-      
-      // Trim white space from all sides
-      const imageData = croppedCtx.getImageData(0, 0, croppedCanvas.width, croppedCanvas.height);
-      const data = imageData.data;
-      
-      let topTrim = 0;
-      let bottomTrim = croppedCanvas.height - 1;
-      let leftTrim = 0;
-      let rightTrim = croppedCanvas.width - 1;
-      
-      // Find top
-      for (let y = 0; y < croppedCanvas.height; y++) {
-        let isRowBlank = true;
-        for (let x = 0; x < croppedCanvas.width; x++) {
-          const index = (y * croppedCanvas.width + x) * 4;
-          if (data[index + 3] > 0 && (data[index] < 250 || data[index + 1] < 250 || data[index + 2] < 250)) {
-            isRowBlank = false;
-            break;
-          }
-        }
-        if (!isRowBlank) {
-          topTrim = y;
-          break;
-        }
-      }
-      
-      // Find bottom
-      for (let y = croppedCanvas.height - 1; y >= 0; y--) {
-        let isRowBlank = true;
-        for (let x = 0; x < croppedCanvas.width; x++) {
-          const index = (y * croppedCanvas.width + x) * 4;
-          if (data[index + 3] > 0 && (data[index] < 250 || data[index + 1] < 250 || data[index + 2] < 250)) {
-            isRowBlank = false;
-            break;
-          }
-        }
-        if (!isRowBlank) {
-          bottomTrim = y;
-          break;
-        }
-      }
-      
-      // Find left
-      for (let x = 0; x < croppedCanvas.width; x++) {
-        let isColBlank = true;
-        for (let y = topTrim; y <= bottomTrim; y++) {
-          const index = (y * croppedCanvas.width + x) * 4;
-          if (data[index + 3] > 0 && (data[index] < 250 || data[index + 1] < 250 || data[index + 2] < 250)) {
-            isColBlank = false;
-            break;
-          }
-        }
-        if (!isColBlank) {
-          leftTrim = x;
-          break;
-        }
-      }
-      
-      // Find right
-      for (let x = croppedCanvas.width - 1; x >= 0; x--) {
-        let isColBlank = true;
-        for (let y = topTrim; y <= bottomTrim; y++) {
-          const index = (y * croppedCanvas.width + x) * 4;
-          if (data[index + 3] > 0 && (data[index] < 250 || data[index + 1] < 250 || data[index + 2] < 250)) {
-            isColBlank = false;
-            break;
-          }
-        }
-        if (!isColBlank) {
-          rightTrim = x;
-          break;
-        }
-      }
-      
-      // Add a little padding
-      const padding = 20;
-      topTrim = Math.max(0, topTrim - padding);
-      bottomTrim = Math.min(croppedCanvas.height - 1, bottomTrim + padding);
-      leftTrim = Math.max(0, leftTrim - padding);
-      rightTrim = Math.min(croppedCanvas.width - 1, rightTrim + padding);
-      
-      const trimWidth = rightTrim - leftTrim + 1;
-      const trimHeight = bottomTrim - topTrim + 1;
-      
-      const finalCanvas = document.createElement('canvas');
-      const finalCtx = finalCanvas.getContext('2d');
-      if (!finalCtx) return;
-      
-      finalCanvas.width = trimWidth;
-      finalCanvas.height = trimHeight;
-      finalCtx.fillStyle = '#ffffff';
-      finalCtx.fillRect(0, 0, trimWidth, trimHeight);
-      finalCtx.drawImage(
-        croppedCanvas, 
-        leftTrim, topTrim, trimWidth, trimHeight,
-        0, 0, trimWidth, trimHeight
-      );
-      
-      setQuestionImage(finalCanvas.toDataURL('image/png'));
-    } catch (error) {
-      console.error('Error rendering question:', error);
-    }
+    // Set static image URL
+    setImageLoaded(false);
+    const prefix = activeSubject === 'economics' ? (level === 'a_level' ? 'econal' : 'econ') : activeSubject === 'accounting' ? (level === 'a_level' ? 'accal' : 'accol') : level === 'core' ? activeSubject.slice(0,3) + 'cr' : level === 'a_level' ? activeSubject.slice(0,3) + 'al' : activeSubject.slice(0,3);
+    setQuestionImage(`/extracted_images/${prefix}/${randomQ.examIndex}_${randomQ.qNumber}.png`);
   };
 
   const handleAnswer = async (ans: string) => {
@@ -1083,8 +904,8 @@ export default function App() {
       return;
     }
 
-    if (pdf && subject) {
-      pickRandomQuestion(pdf, askedQuestionIds);
+    if (subject) {
+      pickRandomQuestion(askedQuestionIds);
     }
   };
 
@@ -1097,13 +918,13 @@ export default function App() {
   };
 
   const handleRestart = () => {
-    if (pdf && subject && getCache(subject, level).validQuestions.length > 0) {
+    if (subject && getCache(subject, level).validQuestions.length > 0) {
       setStats({ total: 0, correct: 0 });
       setAskedQuestionIds(new Set());
       setUserAnswers([]);
       setShowReview(false);
       setScreen('quiz');
-      pickRandomQuestion(pdf, new Set());
+      pickRandomQuestion(new Set());
     }
   };
 
@@ -1127,7 +948,7 @@ export default function App() {
       getCache(subject, level).stopParsing = true;
     }
     setScreen((user || isGuest) ? 'dashboard' : 'home');
-    setPdf(null);
+    
     setQuestions([]);
     setCurrentQuestion(null);
     setAssignmentCount(null);
@@ -1495,7 +1316,7 @@ export default function App() {
           </div>
         )}
 
-        {screen === 'quiz' && pdf && currentQuestion && questionImage !== 'loading' && (
+        {screen === 'quiz' && currentQuestion && questionImage !== 'loading' && (
           <div className="max-w-4xl mx-auto p-2 sm:p-4 space-y-3 sm:space-y-4 flex-1 flex flex-col min-h-0 w-full overflow-hidden">
             <div className={`flex flex-row justify-between items-center gap-2 mb-1 p-2 rounded-xl shadow-sm shrink-0 ${themes[activeTheme].card}`}>
               <div className="flex items-center gap-2">
@@ -1544,11 +1365,20 @@ export default function App() {
             >
               <div className="p-2 sm:p-4 overflow-x-auto min-h-[150px] flex items-center justify-center bg-transparent custom-scrollbar">
                 {questionImage ? (
-                  <img 
-                    src={questionImage} 
-                    alt={`Question ${currentQuestion.qNumber}`}
-                    className="w-full h-auto max-h-[35vh] object-contain mix-blend-multiply dark:mix-blend-screen dark:invert"
-                  />
+                  <div className="relative w-full flex items-center justify-center min-h-[150px]">
+                    {!imageLoaded && questionImage !== 'loading' && (
+                      <div className="absolute inset-0 flex items-center justify-center z-10">
+                        <div className={`animate-spin rounded-full h-8 w-8 border-b-2 ${themes[activeTheme].border} border-t-transparent`}></div>
+                      </div>
+                    )}
+                    <img 
+                      src={questionImage} 
+                      alt={`Question ${currentQuestion.qNumber}`}
+                      onLoad={() => setImageLoaded(true)}
+                      onError={() => setImageLoaded(true)}
+                      className={`w-full h-auto max-h-[35vh] object-contain mix-blend-multiply dark:mix-blend-screen dark:invert transition-opacity duration-300 ${!imageLoaded ? 'opacity-0' : 'opacity-100'}`}
+                    />
+                  </div>
                 ) : (
                   <div className={`flex flex-col items-center ${themes[activeTheme].textSecondary}`}>
                     <div className={`animate-spin rounded-full h-8 w-8 border-b-2 ${themes[activeTheme].border} mb-3`}></div>
@@ -1897,11 +1727,11 @@ export default function App() {
           </div>
         )}
 
-        {screen === 'whole_paper_quiz' && pdf && subject && selectedExamCode && (
+        {screen === 'whole_paper_quiz' && subject && selectedExamCode && (
           <div className="flex-1 overflow-y-auto min-h-0 w-full custom-scrollbar">
             <WholePaperQuiz
               instantFeedback={instantFeedbackMode}
-              pdf={pdf}
+              
               questions={questions.filter(q => q.examCode === selectedExamCode)}
               subject={subject}
               examCode={selectedExamCode}

@@ -6,9 +6,6 @@ import { getPdfUrl } from '../utils/pdfMap';
 import { updateGameProgress, finishGame, updateStats, updateMultiplayerStats } from '../services/db';
 import { generateSeededQuestions } from '../utils/random';
 import { ThemeIcon } from './ThemeIcon';
-import type * as pdfjsLib from 'pdfjs-dist';
-import { getPdfJs } from '../utils/pdfjs';
-import { renderQuestionImage } from '../utils/pdfParser';
 import WholePaperQuiz from './WholePaperQuiz';
 import { isGlobalPremium, hasPremiumForLevel } from '../utils/premium';
 import { motion } from 'motion/react';
@@ -29,6 +26,7 @@ export default function MultiplayerGame({ game, userProfile, onExit, activeTheme
   const [questions, setQuestions] = useState<any[]>([]);
   const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
   const [questionImage, setQuestionImage] = useState<string | null>(null);
+  const [imageLoaded, setImageLoaded] = useState(false);
   const [selectedAnswer, setSelectedAnswer] = useState<string | null>(null);
   const [isCorrect, setIsCorrect] = useState<boolean | null>(null);
   const [timeLeft, setTimeLeft] = useState<number | null>(null);
@@ -40,8 +38,6 @@ export default function MultiplayerGame({ game, userProfile, onExit, activeTheme
   const [explanations, setExplanations] = useState<Record<number, string>>({});
   const [explainingIndex, setExplainingIndex] = useState<number | null>(null);
   
-  const loadedPdfRef = useRef<any>(null);
-  const parserStateRef = useRef<ParserState>(createInitialParserState());
   const localAnswerCountRef = useRef<number | null>(null);
   const isHost = auth.currentUser?.uid === game.hostId;
 
@@ -124,18 +120,6 @@ export default function MultiplayerGame({ game, userProfile, onExit, activeTheme
         return base;
       };
       const fileName = getFileName(game.subject, game.level);
-      let pdf;
-      try {
-        const pdfUrl = getPdfUrl(fileName);
-        
-        const headRes = await fetch(pdfUrl, { method: 'HEAD' });
-        if (!headRes.ok) throw new Error(`Failed to fetch ${fileName}.pdf`);
-        const pdfjsLibInstance = await getPdfJs();
-        pdf = await pdfjsLibInstance.getDocument({ url: pdfUrl }).promise;
-      } catch (err) {
-        throw new Error(`Error loading PDF: Failed to fetch ${fileName}.pdf from storage. Please check your connection.`);
-      }
-      loadedPdfRef.current = pdf;
       
       let validQs: any[] = [];
       try {
@@ -192,17 +176,12 @@ export default function MultiplayerGame({ game, userProfile, onExit, activeTheme
   };
 
   const renderQuestion = async (q: any) => {
-    if (!loadedPdfRef.current) return;
     setQuestionImage(null);
+    setImageLoaded(false);
     setSelectedAnswer(null);
     setIsCorrect(null);
     
-    try {
-      const imgData = await renderQuestionImage(loadedPdfRef.current, q);
-      setQuestionImage(imgData);
-    } catch (err) {
-      console.error(err);
-    }
+    setQuestionImage(`/extracted_images/${game.subject === 'economics' ? (game.level === 'a_level' ? 'econal' : 'econ') : game.subject === 'accounting' ? (game.level === 'a_level' ? 'accal' : 'accol') : game.level === 'core' ? game.subject.slice(0,3) + 'cr' : game.level === 'a_level' ? game.subject.slice(0,3) + 'al' : game.subject.slice(0,3)}/${q.examIndex}_${q.qNumber}.png`);
   };
 
   const handleAnswer = async (ans: string) => {
@@ -273,8 +252,7 @@ export default function MultiplayerGame({ game, userProfile, onExit, activeTheme
       setCurrentQuestionIndex(prev => prev + 1);
       renderQuestion(questions[currentQuestionIndex + 1]);
     } else if (game.mode === 'time') {
-      // Generate more questions if it's a time-only mode and we ran out
-      const validQs = parserStateRef.current.validQuestions;
+      const validQs = [];
       if (validQs.length > 0) {
         const moreIndices = generateSeededQuestions(game.code + auth.currentUser?.uid + 'more' + currentQuestionIndex, validQs.length, 50);
         const moreQs = moreIndices.map(idx => validQs[idx % validQs.length]);
@@ -283,7 +261,6 @@ export default function MultiplayerGame({ game, userProfile, onExit, activeTheme
         renderQuestion(moreQs[0]);
       }
     } else {
-      // Last question in non-time mode
       handleGameEnd();
     }
   };
@@ -574,7 +551,7 @@ export default function MultiplayerGame({ game, userProfile, onExit, activeTheme
       <div className="h-full flex flex-col max-w-4xl mx-auto p-4 sm:p-6 w-full">
         <div className="flex-1 overflow-y-auto min-h-0 w-full">
           <WholePaperQuiz
-            pdf={loadedPdfRef.current}
+            
             questions={questions}
             subject={game.subject}
             examCode={game.targetExamCode || ''}
@@ -710,7 +687,20 @@ export default function MultiplayerGame({ game, userProfile, onExit, activeTheme
         >
           <div className={`p-2 sm:p-4 min-h-[150px] flex items-center justify-center ${themes[activeTheme].card} overflow-x-auto custom-scrollbar`}>
             {questionImage ? (
-              <img src={questionImage} alt="Question" className="w-full h-auto max-h-[35vh] object-contain mix-blend-multiply dark:mix-blend-screen dark:invert" />
+              <div className="relative w-full flex items-center justify-center min-h-[150px]">
+                {!imageLoaded && questionImage !== 'loading' && (
+                  <div className="absolute inset-0 flex items-center justify-center z-10">
+                    <div className={`animate-spin rounded-full h-8 w-8 sm:h-10 sm:w-10 border-b-2 ${themes[activeTheme].accent}`}></div>
+                  </div>
+                )}
+                <img 
+                  src={questionImage} 
+                  alt="Question" 
+                  onLoad={() => setImageLoaded(true)}
+                  onError={() => setImageLoaded(true)}
+                  className={`w-full h-auto max-h-[35vh] object-contain mix-blend-multiply dark:mix-blend-screen dark:invert transition-opacity duration-300 ${!imageLoaded ? 'opacity-0' : 'opacity-100'}`} 
+                />
+              </div>
             ) : (
               <div className={`animate-spin rounded-full h-8 w-8 sm:h-10 sm:w-10 border-b-2 ${themes[activeTheme].accent}`}></div>
             )}
