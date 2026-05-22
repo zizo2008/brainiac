@@ -119,5 +119,14 @@ export const TrimmedImage: React.FC<TrimmedImageProps> = ({ src, alt, className,
     img.src = src;
   }, [src, onLoad, onError]);
 
-  return <canvas ref={canvasRef} className={className} style={style} aria-label={alt} />;
+  // Canvas elements don't respond to object-contain or w-full like <img> does.
+  // We must force scaling via inline style so it fills the container properly.
+  const baseStyle: React.CSSProperties = {
+    display: 'block',
+    width: '100%',
+    height: 'auto',
+    maxHeight: '50vh',
+  };
+
+  return <canvas ref={canvasRef} className={className} style={{ ...baseStyle, ...style }} aria-label={alt} />;
 };
