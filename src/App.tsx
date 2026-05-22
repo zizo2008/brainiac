@@ -399,6 +399,111 @@ export default function App() {
   const preloadedPdfsRef = useRef<Record<string, pdfjsLib.PDFDocumentProxy>>({});
   const preRenderedQuestionsRef = useRef<Record<string, {question: any, image: string}>>({});
 
+  // Map from image URL -> pre-cropped data: URL (or 'loading' while processing)
+  const imageCacheRef = useRef<Map<string, string>>(new Map());
+  const processingSetRef = useRef<Set<string>>(new Set());
+
+  /** Run the trim algorithm in the background and store the result in imageCacheRef */
+  const processAndCacheImage = (url: string): void => {
+    if (imageCacheRef.current.has(url) || processingSetRef.current.has(url)) return;
+    processingSetRef.current.add(url);
+
+    const img = new Image();
+    img.crossOrigin = 'Anonymous';
+    img.onload = () => {
+      try {
+        const canvas = document.createElement('canvas');
+        canvas.width = img.width;
+        canvas.height = img.height;
+        const ctx = canvas.getContext('2d', { willReadFrequently: true });
+        if (!ctx) {
+          imageCacheRef.current.set(url, url); // fallback: use raw URL
+          processingSetRef.current.delete(url);
+          return;
+        }
+        ctx.drawImage(img, 0, 0);
+        const imgData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+        const data = imgData.data;
+
+        let top = 0, bottom = img.height - 1;
+        for (let y = 0; y < img.height; y++) {
+          let count = 0;
+          for (let x = 0; x < img.width; x++) {
+            const i = (y * img.width + x) * 4;
+            if (data[i+3] > 0 && (data[i] < 200 || data[i+1] < 200 || data[i+2] < 200)) count++;
+          }
+          if (count > 5) { top = y; break; }
+        }
+        for (let y = img.height - 1; y >= 0; y--) {
+          let count = 0;
+          for (let x = 0; x < img.width; x++) {
+            const i = (y * img.width + x) * 4;
+            if (data[i+3] > 0 && (data[i] < 200 || data[i+1] < 200 || data[i+2] < 200)) count++;
+          }
+          if (count > 5) { bottom = y; break; }
+        }
+
+        const marginX = Math.floor(img.width * 0.08);
+        let left = 0, right = img.width - 1;
+        for (let x = marginX; x < img.width - marginX; x++) {
+          let count = 0;
+          for (let y = 0; y < img.height; y++) {
+            const i = (y * img.width + x) * 4;
+            if (data[i+3] > 0 && (data[i] < 200 || data[i+1] < 200 || data[i+2] < 200)) count++;
+          }
+          if (count > 5) { left = x; break; }
+        }
+        for (let x = img.width - marginX; x >= marginX; x--) {
+          let count = 0;
+          for (let y = 0; y < img.height; y++) {
+            const i = (y * img.width + x) * 4;
+            if (data[i+3] > 0 && (data[i] < 200 || data[i+1] < 200 || data[i+2] < 200)) count++;
+          }
+          if (count > 5) { right = x; break; }
+        }
+
+        const padding = 10;
+        top = Math.max(0, top - padding);
+        bottom = Math.min(img.height - 1, bottom + padding);
+        left = Math.max(0, left - padding);
+        right = Math.min(img.width - 1, right + padding);
+
+        const trimWidth = Math.max(1, right - left + 1);
+        const trimHeight = Math.max(1, bottom - top + 1);
+
+        const out = document.createElement('canvas');
+        out.width = trimWidth;
+        out.height = trimHeight;
+        const outCtx = out.getContext('2d')!;
+        outCtx.fillStyle = '#ffffff';
+        outCtx.fillRect(0, 0, trimWidth, trimHeight);
+        outCtx.drawImage(img, left, top, trimWidth, trimHeight, 0, 0, trimWidth, trimHeight);
+
+        imageCacheRef.current.set(url, out.toDataURL('image/png'));
+      } catch {
+        imageCacheRef.current.set(url, url); // fallback on error
+      } finally {
+        processingSetRef.current.delete(url);
+      }
+    };
+    img.onerror = () => {
+      imageCacheRef.current.set(url, url); // fallback on 404
+      processingSetRef.current.delete(url);
+    };
+    img.src = url;
+  };
+
+  const getImageUrl = (subj: Subject | string, lvl: Level, examIndex: number, qNumber: number): string => {
+    const s = subj.toLowerCase();
+    const prefix = s === 'economics' ? (lvl === 'a_level' ? 'econal' : 'econ')
+      : s === 'accounting' ? (lvl === 'a_level' ? 'accal' : 'accol')
+      : s === 'chemistry' ? (lvl === 'a_level' ? 'chemal' : lvl === 'core' ? 'chemcr' : 'chem')
+      : lvl === 'core' ? s.slice(0,3) + 'cr'
+      : lvl === 'a_level' ? s.slice(0,3) + 'al'
+      : s.slice(0,3);
+    return `/extracted_images/${prefix}/${examIndex}_${qNumber}.png`;
+  };
+
   const subjectCachesRef = useRef<Record<string, ParserState>>({});
 
   const getCacheKey = (subj: Subject, lvl: Level) => `${subj}_${lvl}`;
@@ -515,6 +620,33 @@ export default function App() {
     // Start preloading after a short delay to prioritize initial render
     setTimeout(preloadPdfs, 1000);
   }, [level, userProfile?.prioritizedSubjects]); // Re-run when level or prioritized subjects change
+
+  // Pre-process images for the prioritized subject immediately on page load
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      // Pick the first prioritized subject or default to chemistry
+      let startSubj: Subject = 'chemistry';
+      let startLvl: Level = level;
+      if (userProfile?.prioritizedSubjects && userProfile.prioritizedSubjects.length > 0) {
+        const p = userProfile.prioritizedSubjects[0];
+        startSubj = p.subject as Subject;
+        const lvls = p.levels && p.levels.length > 0 ? p.levels : [(p as any).level || 'extended'];
+        startLvl = lvls[0] as Level;
+      }
+      const cache = getCache(startSubj, startLvl);
+      if (cache.validQuestions.length > 0) {
+        // Pick 4 random questions and pre-process their images
+        const pool = [...cache.validQuestions];
+        const picks: Question[] = [];
+        for (let i = 0; i < 4 && pool.length > 0; i++) {
+          const idx = Math.floor(Math.random() * pool.length);
+          picks.push(pool.splice(idx, 1)[0]);
+        }
+        picks.forEach(q => processAndCacheImage(getImageUrl(startSubj, startLvl, q.examIndex, q.qNumber)));
+      }
+    }, 2500); // Wait for question data to be loaded first
+    return () => clearTimeout(timer);
+  }, [userProfile?.prioritizedSubjects, level]);
   const [questions, setQuestions] = useState<Question[]>([]);
   const [currentQuestion, setCurrentQuestion] = useState<Question | null>(null);
   const [upcomingQuestions, setUpcomingQuestions] = useState<Question[]>([]);
@@ -710,10 +842,35 @@ export default function App() {
     newAskedIds.add(`${nextQ.examIndex}-${nextQ.qNumber}`);
     setAskedQuestionIds(newAskedIds);
 
-    // Set static image URL
-    setImageLoaded(false);
-    const prefix = activeSubject === 'economics' ? (level === 'a_level' ? 'econal' : 'econ') : activeSubject === 'accounting' ? (level === 'a_level' ? 'accal' : 'accol') : activeSubject === 'chemistry' ? (level === 'a_level' ? 'chemal' : level === 'core' ? 'chemcr' : 'chem') : level === 'core' ? activeSubject.slice(0,3) + 'cr' : level === 'a_level' ? activeSubject.slice(0,3) + 'al' : activeSubject.slice(0,3);
-    setQuestionImage(`/extracted_images/${prefix}/${nextQ.examIndex}_${nextQ.qNumber}.png`);
+    // Kick off background image processing for the entire upcoming queue
+    newUpcoming.forEach(q => processAndCacheImage(getImageUrl(activeSubject, level, q.examIndex, q.qNumber)));
+
+    // Set image URL — if already cached, it shows instantly; otherwise loader shows
+    const rawUrl = getImageUrl(activeSubject, level, nextQ.examIndex, nextQ.qNumber);
+    const cached = imageCacheRef.current.get(rawUrl);
+    if (cached) {
+      setQuestionImage(cached);
+      setImageLoaded(true);
+    } else {
+      // Start processing and show a loading state
+      setImageLoaded(false);
+      processAndCacheImage(rawUrl);
+      // Poll until the image is ready (max 8 seconds)
+      let attempts = 0;
+      const poll = setInterval(() => {
+        attempts++;
+        const ready = imageCacheRef.current.get(rawUrl);
+        if (ready) {
+          clearInterval(poll);
+          setQuestionImage(ready);
+          setImageLoaded(true);
+        } else if (attempts > 80) {
+          clearInterval(poll);
+          setQuestionImage(rawUrl); // fallback to raw URL
+          setImageLoaded(true);
+        }
+      }, 100);
+    }
   };
 
   const handleAnswer = async (ans: string) => {
@@ -1316,7 +1473,7 @@ export default function App() {
           </motion.div>
         )}
 
-        {screen === 'quiz' && (!currentQuestion || questionImage === 'loading') && (
+        {screen === 'quiz' && (!currentQuestion || !imageLoaded) && (
           <div className="max-w-4xl mx-auto p-2 sm:p-4 space-y-3 sm:space-y-4 flex-1 flex flex-col min-h-0 w-full overflow-hidden animate-pulse">
             {/* Header Skeleton */}
             <div className={`flex flex-row justify-between items-center gap-2 mb-1 p-2 rounded-xl shadow-sm shrink-0 ${themes[activeTheme].card}`}>
@@ -1344,7 +1501,7 @@ export default function App() {
           </div>
         )}
 
-        {screen === 'quiz' && currentQuestion && questionImage !== 'loading' && (
+        {screen === 'quiz' && currentQuestion && imageLoaded && (
           <div className="max-w-4xl mx-auto p-2 sm:p-4 space-y-3 sm:space-y-4 flex-1 flex flex-col min-h-0 w-full overflow-hidden">
             <div className={`flex flex-row justify-between items-center gap-2 mb-1 p-2 rounded-xl shadow-sm shrink-0 ${themes[activeTheme].card}`}>
               <div className="flex items-center gap-2">
@@ -1392,25 +1549,22 @@ export default function App() {
               className={`${themes[activeTheme].card} rounded-2xl shadow-sm overflow-hidden transition-colors duration-200`}
             >
               <div className="p-2 sm:p-4 overflow-x-auto min-h-[150px] flex items-center justify-center bg-transparent custom-scrollbar">
-                {questionImage ? (
-                  <div className="relative w-full flex items-center justify-center min-h-[150px]">
-                    {!imageLoaded && questionImage !== 'loading' && (
-                      <div className="absolute inset-0 flex items-center justify-center z-10">
-                        <div className={`animate-spin rounded-full h-8 w-8 border-b-2 ${themes[activeTheme].border} border-t-transparent`}></div>
-                      </div>
-                    )}
-                    <TrimmedImage 
-                      src={questionImage} 
-                      alt={`Question ${currentQuestion.qNumber}`}
-                      onLoad={() => setImageLoaded(true)}
-                      onError={() => setImageLoaded(true)}
-                      className={`max-w-full mx-auto h-auto max-h-[50vh] object-contain mix-blend-multiply dark:mix-blend-screen dark:invert transition-opacity duration-300 ${!imageLoaded ? 'opacity-0' : 'opacity-100'}`}
-                    />
-                  </div>
+                {questionImage && imageLoaded ? (
+                  // Image is pre-processed and ready — display instantly as a plain <img>
+                  <img
+                    src={questionImage}
+                    alt={`Question ${currentQuestion.qNumber}`}
+                    style={{ display: 'block', width: '100%', height: 'auto', maxHeight: '50vh' }}
+                    className="mix-blend-multiply dark:mix-blend-screen dark:invert"
+                  />
                 ) : (
-                  <div className={`flex flex-col items-center ${themes[activeTheme].textSecondary}`}>
-                    <div className={`animate-spin rounded-full h-8 w-8 border-b-2 ${themes[activeTheme].border} mb-3`}></div>
-                    <p className="text-sm font-medium">Extracting...</p>
+                  // Loading skeleton while image is being pre-processed
+                  <div className="relative w-full flex items-center justify-center min-h-[200px]">
+                    <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 z-10">
+                      <div className={`animate-spin rounded-full h-10 w-10 border-b-4 ${themes[activeTheme].border} border-t-transparent`}></div>
+                      <p className={`text-xs font-semibold uppercase tracking-widest ${themes[activeTheme].textSecondary}`}>Loading question...</p>
+                    </div>
+                    <div className={`w-full h-48 rounded-xl ${themes[activeTheme].tabInactive} opacity-40`}></div>
                   </div>
                 )}
               </div>
@@ -2058,14 +2212,7 @@ export default function App() {
         {renderScreen()}
       </div>
       
-      {/* Preload Upcoming Question Images */}
-      <div style={{ display: 'none' }} aria-hidden="true">
-        {upcomingQuestions.map(q => {
-          const prefix = subject === 'economics' ? (level === 'a_level' ? 'econal' : 'econ') : subject === 'accounting' ? (level === 'a_level' ? 'accal' : 'accol') : subject === 'chemistry' ? (level === 'a_level' ? 'chemal' : level === 'core' ? 'chemcr' : 'chem') : level === 'core' ? subject?.slice(0,3) + 'cr' : level === 'a_level' ? subject?.slice(0,3) + 'al' : subject?.slice(0,3);
-          if (!prefix) return null;
-          return <link key={`${q.examIndex}-${q.qNumber}`} rel="preload" as="image" href={`/extracted_images/${prefix}/${q.examIndex}_${q.qNumber}.png`} />;
-        })}
-      </div>
+      {/* Background image pre-processing happens via processAndCacheImage — no DOM elements needed */}
     </div>
   );
 }
