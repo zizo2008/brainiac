@@ -181,7 +181,7 @@ export default function MultiplayerGame({ game, userProfile, onExit, activeTheme
     setSelectedAnswer(null);
     setIsCorrect(null);
     
-    setQuestionImage(`/extracted_images/${game.subject === 'economics' ? (game.level === 'a_level' ? 'econal' : 'econ') : game.subject === 'accounting' ? (game.level === 'a_level' ? 'accal' : 'accol') : game.level === 'core' ? game.subject.slice(0,3) + 'cr' : game.level === 'a_level' ? game.subject.slice(0,3) + 'al' : game.subject.slice(0,3)}/${q.examIndex}_${q.qNumber}.png`);
+    setQuestionImage(`/extracted_images/${game.subject === 'economics' ? (game.level === 'a_level' ? 'econal' : 'econ') : game.subject === 'accounting' ? (game.level === 'a_level' ? 'accal' : 'accol') : game.subject === 'chemistry' ? (game.level === 'a_level' ? 'chemal' : game.level === 'core' ? 'chemcr' : 'chem') : game.level === 'core' ? game.subject.slice(0,3) + 'cr' : game.level === 'a_level' ? game.subject.slice(0,3) + 'al' : game.subject.slice(0,3)}/${q.examIndex}_${q.qNumber}.png`);
   };
 
   const handleAnswer = async (ans: string) => {

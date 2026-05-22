@@ -597,7 +597,7 @@ export default function App() {
         setHintTimer(0);
         const subj = vaultQuestion.subject || '';
         const vlevel = vaultQuestion.level || 'o_level';
-        const prefix = subj === 'economics' ? (vlevel === 'a_level' ? 'econal' : 'econ') : subj === 'accounting' ? (vlevel === 'a_level' ? 'accal' : 'accol') : vlevel === 'core' ? subj.slice(0,3) + 'cr' : vlevel === 'a_level' ? subj.slice(0,3) + 'al' : subj.slice(0,3);
+        const prefix = subj === 'economics' ? (vlevel === 'a_level' ? 'econal' : 'econ') : subj === 'accounting' ? (vlevel === 'a_level' ? 'accal' : 'accol') : subj === 'chemistry' ? (vlevel === 'a_level' ? 'chemal' : vlevel === 'core' ? 'chemcr' : 'chem') : vlevel === 'core' ? subj.slice(0,3) + 'cr' : vlevel === 'a_level' ? subj.slice(0,3) + 'al' : subj.slice(0,3);
         setQuestionImage(`/extracted_images/${prefix}/${vaultQuestion.examIndex}_${vaultQuestion.qNumber}.png`);
       } else {
         if (cache.validQuestions.length === 0) {
@@ -684,7 +684,7 @@ export default function App() {
 
     // Set static image URL
     setImageLoaded(false);
-    const prefix = activeSubject === 'economics' ? (level === 'a_level' ? 'econal' : 'econ') : activeSubject === 'accounting' ? (level === 'a_level' ? 'accal' : 'accol') : level === 'core' ? activeSubject.slice(0,3) + 'cr' : level === 'a_level' ? activeSubject.slice(0,3) + 'al' : activeSubject.slice(0,3);
+    const prefix = activeSubject === 'economics' ? (level === 'a_level' ? 'econal' : 'econ') : activeSubject === 'accounting' ? (level === 'a_level' ? 'accal' : 'accol') : activeSubject === 'chemistry' ? (level === 'a_level' ? 'chemal' : level === 'core' ? 'chemcr' : 'chem') : level === 'core' ? activeSubject.slice(0,3) + 'cr' : level === 'a_level' ? activeSubject.slice(0,3) + 'al' : activeSubject.slice(0,3);
     setQuestionImage(`/extracted_images/${prefix}/${randomQ.examIndex}_${randomQ.qNumber}.png`);
   };
 
