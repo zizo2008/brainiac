@@ -1937,7 +1937,7 @@ export default function App() {
           <div className="flex-1 overflow-y-auto min-h-0 w-full custom-scrollbar">
             <WholePaperQuiz
               instantFeedback={instantFeedbackMode}
-              
+              level={level}
               questions={questions.filter(q => q.examCode === selectedExamCode)}
               subject={subject}
               examCode={selectedExamCode}
