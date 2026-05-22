@@ -28,6 +28,7 @@ import AdminDashboard from './components/AdminDashboard';
 import { motion, AnimatePresence } from 'motion/react';
 import Navbar from './components/Navbar';
 import ProfileModal from './components/ProfileModal';
+import { TrimmedImage } from './components/TrimmedImage';
 import SubjectOnboardingModal from './components/SubjectOnboardingModal';
 import FriendHubModal from './components/FriendHubModal';
 import { themes, ThemeName } from './theme';
@@ -1398,7 +1399,7 @@ export default function App() {
                         <div className={`animate-spin rounded-full h-8 w-8 border-b-2 ${themes[activeTheme].border} border-t-transparent`}></div>
                       </div>
                     )}
-                    <img 
+                    <TrimmedImage 
                       src={questionImage} 
                       alt={`Question ${currentQuestion.qNumber}`}
                       onLoad={() => setImageLoaded(true)}
@@ -1895,7 +1896,7 @@ export default function App() {
                         <div className="flex flex-col gap-4">
                           <div className="w-full bg-white rounded-2xl p-4 flex items-center justify-center">
                             {ans.questionImage ? (
-                              <img src={ans.questionImage} alt="Question" className="max-h-48 object-contain" />
+                              <TrimmedImage src={ans.questionImage} alt="Question" className="max-h-48 object-contain" />
                             ) : (
                               <div className="text-xs text-gray-400 italic">No preview available</div>
                             )}

@@ -6,6 +6,7 @@ import { motion } from 'motion/react';
 import { Question } from '../types';
 import BookmarkModal from './BookmarkModal';
 import { isGlobalPremium, hasPremiumForLevel } from '../utils/premium';
+import { TrimmedImage } from './TrimmedImage';
 
 interface WholePaperQuizProps {
   questions: Question[];
@@ -348,7 +349,7 @@ export default function WholePaperQuiz({ questions, subject, examCode, isParsing
                       <div className={`animate-spin rounded-full h-8 w-8 sm:h-10 sm:w-10 border-b-2 ${themes[activeTheme].accent}`}></div>
                     </div>
                   )}
-                  <img 
+                  <TrimmedImage 
                     src={imageMap[currentQuestion.qNumber]} 
                     alt={`Question ${currentQuestion.qNumber}`}
                     onLoad={() => setImageLoaded(true)}

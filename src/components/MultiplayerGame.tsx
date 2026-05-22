@@ -7,7 +7,9 @@ import { updateGameProgress, finishGame, updateStats, updateMultiplayerStats } f
 import { generateSeededQuestions } from '../utils/random';
 import { ThemeIcon } from './ThemeIcon';
 import WholePaperQuiz from './WholePaperQuiz';
+import BookmarkModal from './BookmarkModal';
 import { isGlobalPremium, hasPremiumForLevel } from '../utils/premium';
+import { TrimmedImage } from './TrimmedImage';
 import { motion } from 'motion/react';
 
 
@@ -415,7 +417,7 @@ export default function MultiplayerGame({ game, userProfile, onExit, activeTheme
                       <div className="flex flex-col sm:flex-row gap-6">
                         <div className="w-full sm:w-1/2 bg-white rounded-xl p-2 flex items-center justify-center">
                           {ans.questionImage ? (
-                            <img src={ans.questionImage} alt="Question" className="max-h-32 object-contain" />
+                            <TrimmedImage src={ans.questionImage} alt="Question" className="max-h-32 object-contain" />
                           ) : (
                             <div className="h-32 flex items-center justify-center text-xs text-gray-400">Image not available</div>
                           )}
@@ -693,7 +695,7 @@ export default function MultiplayerGame({ game, userProfile, onExit, activeTheme
                     <div className={`animate-spin rounded-full h-8 w-8 sm:h-10 sm:w-10 border-b-2 ${themes[activeTheme].accent}`}></div>
                   </div>
                 )}
-                <img 
+                <TrimmedImage 
                   src={questionImage} 
                   alt="Question" 
                   onLoad={() => setImageLoaded(true)}
