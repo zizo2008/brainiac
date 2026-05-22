@@ -1404,7 +1404,7 @@ export default function App() {
                       alt={`Question ${currentQuestion.qNumber}`}
                       onLoad={() => setImageLoaded(true)}
                       onError={() => setImageLoaded(true)}
-                      className={`w-full h-auto max-h-[35vh] object-contain mix-blend-multiply dark:mix-blend-screen dark:invert transition-opacity duration-300 ${!imageLoaded ? 'opacity-0' : 'opacity-100'}`}
+                      className={`max-w-full mx-auto h-auto max-h-[50vh] object-contain mix-blend-multiply dark:mix-blend-screen dark:invert transition-opacity duration-300 ${!imageLoaded ? 'opacity-0' : 'opacity-100'}`}
                     />
                   </div>
                 ) : (
@@ -1896,7 +1896,7 @@ export default function App() {
                         <div className="flex flex-col gap-4">
                           <div className="w-full bg-white rounded-2xl p-4 flex items-center justify-center">
                             {ans.questionImage ? (
-                              <TrimmedImage src={ans.questionImage} alt="Question" className="max-h-48 object-contain" />
+                              <TrimmedImage src={ans.questionImage} alt="Question" className="max-h-48 max-w-full mx-auto object-contain" />
                             ) : (
                               <div className="text-xs text-gray-400 italic">No preview available</div>
                             )}

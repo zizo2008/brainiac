@@ -417,7 +417,7 @@ export default function MultiplayerGame({ game, userProfile, onExit, activeTheme
                       <div className="flex flex-col sm:flex-row gap-6">
                         <div className="w-full sm:w-1/2 bg-white rounded-xl p-2 flex items-center justify-center">
                           {ans.questionImage ? (
-                            <TrimmedImage src={ans.questionImage} alt="Question" className="max-h-32 object-contain" />
+                            <TrimmedImage src={ans.questionImage} alt="Question" className="max-h-32 max-w-full mx-auto object-contain" />
                           ) : (
                             <div className="h-32 flex items-center justify-center text-xs text-gray-400">Image not available</div>
                           )}
@@ -700,7 +700,7 @@ export default function MultiplayerGame({ game, userProfile, onExit, activeTheme
                   alt="Question" 
                   onLoad={() => setImageLoaded(true)}
                   onError={() => setImageLoaded(true)}
-                  className={`w-full h-auto max-h-[35vh] object-contain mix-blend-multiply dark:mix-blend-screen dark:invert transition-opacity duration-300 ${!imageLoaded ? 'opacity-0' : 'opacity-100'}`} 
+                  className={`max-w-full mx-auto h-auto max-h-[50vh] object-contain mix-blend-multiply dark:mix-blend-screen dark:invert transition-opacity duration-300 ${!imageLoaded ? 'opacity-0' : 'opacity-100'}`} 
                 />
               </div>
             ) : (

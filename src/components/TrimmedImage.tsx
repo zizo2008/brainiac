@@ -32,53 +32,58 @@ export const TrimmedImage: React.FC<TrimmedImageProps> = ({ src, alt, className,
       
       let top = 0, bottom = img.height - 1, left = 0, right = img.width - 1;
 
-      // Find top
       let found = false;
       for (let y = 0; y < img.height; y++) {
+        let count = 0;
         for (let x = 0; x < img.width; x++) {
           const i = (y * img.width + x) * 4;
           // Not totally transparent and not pure white
-          if (data[i+3] > 0 && (data[i] < 250 || data[i+1] < 250 || data[i+2] < 250)) {
-            top = y; found = true; break;
+          if (data[i+3] > 0 && (data[i] < 200 || data[i+1] < 200 || data[i+2] < 200)) {
+            count++;
           }
         }
-        if (found) break;
+        if (count > 5) { top = y; found = true; break; }
       }
 
       // Find bottom
       found = false;
       for (let y = img.height - 1; y >= 0; y--) {
+        let count = 0;
         for (let x = 0; x < img.width; x++) {
           const i = (y * img.width + x) * 4;
-          if (data[i+3] > 0 && (data[i] < 250 || data[i+1] < 250 || data[i+2] < 250)) {
-            bottom = y; found = true; break;
+          if (data[i+3] > 0 && (data[i] < 200 || data[i+1] < 200 || data[i+2] < 200)) {
+            count++;
           }
         }
-        if (found) break;
+        if (count > 5) { bottom = y; found = true; break; }
       }
 
+      const marginX = Math.floor(img.width * 0.08); // 8% margin
+      
       // Find left
       found = false;
-      for (let x = 0; x < img.width; x++) {
+      for (let x = marginX; x < img.width - marginX; x++) {
+        let count = 0;
         for (let y = 0; y < img.height; y++) {
           const i = (y * img.width + x) * 4;
-          if (data[i+3] > 0 && (data[i] < 250 || data[i+1] < 250 || data[i+2] < 250)) {
-            left = x; found = true; break;
+          if (data[i+3] > 0 && (data[i] < 200 || data[i+1] < 200 || data[i+2] < 200)) {
+            count++;
           }
         }
-        if (found) break;
+        if (count > 5) { left = x; found = true; break; }
       }
 
       // Find right
       found = false;
-      for (let x = img.width - 1; x >= 0; x--) {
+      for (let x = img.width - marginX; x >= marginX; x--) {
+        let count = 0;
         for (let y = 0; y < img.height; y++) {
           const i = (y * img.width + x) * 4;
-          if (data[i+3] > 0 && (data[i] < 250 || data[i+1] < 250 || data[i+2] < 250)) {
-            right = x; found = true; break;
+          if (data[i+3] > 0 && (data[i] < 200 || data[i+1] < 200 || data[i+2] < 200)) {
+            count++;
           }
         }
-        if (found) break;
+        if (count > 5) { right = x; found = true; break; }
       }
 
       // Add small padding

@@ -354,7 +354,7 @@ export default function WholePaperQuiz({ questions, subject, examCode, isParsing
                     alt={`Question ${currentQuestion.qNumber}`}
                     onLoad={() => setImageLoaded(true)}
                     onError={() => setImageLoaded(true)}
-                    className={`w-full h-auto max-h-[35vh] object-contain mix-blend-multiply dark:mix-blend-screen dark:invert transition-opacity duration-300 ${!imageLoaded ? 'opacity-0' : 'opacity-100'}`}
+                    className={`max-w-full mx-auto h-auto max-h-[50vh] object-contain mix-blend-multiply dark:mix-blend-screen dark:invert transition-opacity duration-300 ${!imageLoaded ? 'opacity-0' : 'opacity-100'}`}
                   />
                 </div>
               ) : (
