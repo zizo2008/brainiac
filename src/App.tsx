@@ -516,6 +516,7 @@ export default function App() {
   }, [level, userProfile?.prioritizedSubjects]); // Re-run when level or prioritized subjects change
   const [questions, setQuestions] = useState<Question[]>([]);
   const [currentQuestion, setCurrentQuestion] = useState<Question | null>(null);
+  const [upcomingQuestions, setUpcomingQuestions] = useState<Question[]>([]);
   const [questionImage, setQuestionImage] = useState<string | null>(null);
   const [imageLoaded, setImageLoaded] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -668,24 +669,50 @@ export default function App() {
     setHintTipText('');
     setHintTimer(0);
     
-    let availableQs = cache.validQuestions.filter(q => !currentAskedIds.has(`${q.examIndex}-${q.qNumber}`));
+    // Clear queue if the subject changed or it's a completely fresh start
+    let newUpcoming = [...upcomingQuestions];
+    if (currentAskedIds.size === 0) {
+      newUpcoming = [];
+    }
+    
+    // Get all valid questions not yet asked AND not currently in the upcoming queue
+    const upcomingIds = new Set(newUpcoming.map(q => `${q.examIndex}-${q.qNumber}`));
+    let availableQs = cache.validQuestions.filter(q => 
+      !currentAskedIds.has(`${q.examIndex}-${q.qNumber}`) && !upcomingIds.has(`${q.examIndex}-${q.qNumber}`)
+    );
 
-    if (availableQs.length === 0) {
-      setScreen('results');
-      return;
+    let nextQ: Question;
+
+    // Pull from queue if available, otherwise generate instantly
+    if (newUpcoming.length > 0) {
+      nextQ = newUpcoming.shift()!;
+    } else {
+      if (availableQs.length === 0) {
+        setScreen('results');
+        return;
+      }
+      nextQ = availableQs[Math.floor(Math.random() * availableQs.length)];
+      availableQs = availableQs.filter(q => q !== nextQ);
     }
 
-    const randomQ = availableQs[Math.floor(Math.random() * availableQs.length)];
-    setCurrentQuestion(randomQ);
+    // Refill the queue so there's always 4 items
+    while (newUpcoming.length < 4 && availableQs.length > 0) {
+      const randomQ = availableQs[Math.floor(Math.random() * availableQs.length)];
+      newUpcoming.push(randomQ);
+      availableQs = availableQs.filter(q => q !== randomQ);
+    }
+
+    setUpcomingQuestions(newUpcoming);
+    setCurrentQuestion(nextQ);
 
     const newAskedIds = new Set(currentAskedIds);
-    newAskedIds.add(`${randomQ.examIndex}-${randomQ.qNumber}`);
+    newAskedIds.add(`${nextQ.examIndex}-${nextQ.qNumber}`);
     setAskedQuestionIds(newAskedIds);
 
     // Set static image URL
     setImageLoaded(false);
     const prefix = activeSubject === 'economics' ? (level === 'a_level' ? 'econal' : 'econ') : activeSubject === 'accounting' ? (level === 'a_level' ? 'accal' : 'accol') : activeSubject === 'chemistry' ? (level === 'a_level' ? 'chemal' : level === 'core' ? 'chemcr' : 'chem') : level === 'core' ? activeSubject.slice(0,3) + 'cr' : level === 'a_level' ? activeSubject.slice(0,3) + 'al' : activeSubject.slice(0,3);
-    setQuestionImage(`/extracted_images/${prefix}/${randomQ.examIndex}_${randomQ.qNumber}.png`);
+    setQuestionImage(`/extracted_images/${prefix}/${nextQ.examIndex}_${nextQ.qNumber}.png`);
   };
 
   const handleAnswer = async (ans: string) => {
@@ -2028,6 +2055,15 @@ export default function App() {
 
       <div className={`flex-1 overflow-hidden ${(user || isGuest) ? 'pt-16' : ''}`}>
         {renderScreen()}
+      </div>
+      
+      {/* Preload Upcoming Question Images */}
+      <div style={{ display: 'none' }} aria-hidden="true">
+        {upcomingQuestions.map(q => {
+          const prefix = subject === 'economics' ? (level === 'a_level' ? 'econal' : 'econ') : subject === 'accounting' ? (level === 'a_level' ? 'accal' : 'accol') : subject === 'chemistry' ? (level === 'a_level' ? 'chemal' : level === 'core' ? 'chemcr' : 'chem') : level === 'core' ? subject?.slice(0,3) + 'cr' : level === 'a_level' ? subject?.slice(0,3) + 'al' : subject?.slice(0,3);
+          if (!prefix) return null;
+          return <link key={`${q.examIndex}-${q.qNumber}`} rel="preload" as="image" href={`/extracted_images/${prefix}/${q.examIndex}_${q.qNumber}.png`} />;
+        })}
       </div>
     </div>
   );

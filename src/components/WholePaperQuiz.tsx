@@ -506,6 +506,19 @@ export default function WholePaperQuiz({ questions, subject, examCode, isParsing
           activeTheme={activeTheme}
         />
       )}
+      
+      {/* Sequential Preload Upcoming Question Images */}
+      {sortedQuestions.length > 0 && (
+        <div style={{ display: 'none' }} aria-hidden="true">
+          {[1, 2, 3, 4].map(offset => {
+            const nextIdx = currentIndex + offset;
+            if (nextIdx >= sortedQuestions.length) return null;
+            const nextQ = sortedQuestions[nextIdx];
+            const prefix = subject === 'economics' ? (level === 'a_level' ? 'econal' : 'econ') : subject === 'accounting' ? (level === 'a_level' ? 'accal' : 'accol') : subject === 'chemistry' ? (level === 'a_level' ? 'chemal' : level === 'core' ? 'chemcr' : 'chem') : level === 'core' ? subject.slice(0,3) + 'cr' : level === 'a_level' ? subject.slice(0,3) + 'al' : subject.slice(0,3);
+            return <link key={`preload-${nextIdx}`} rel="preload" as="image" href={`/extracted_images/${prefix}/${nextQ.examIndex}_${nextQ.qNumber}.png`} />;
+          })}
+        </div>
+      )}
     </div>
   );
 }
